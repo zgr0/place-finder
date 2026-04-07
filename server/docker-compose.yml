@@ -1,0 +1,43 @@
+
+services:
+  # Database: PostGIS (PostgreSQL with Spatial Extensions)
+  db:
+    image: postgis/postgis:15-3.3-alpine
+    container_name: placefinder_db
+    restart: always
+    environment:
+      POSTGRES_USER: user
+      POSTGRES_PASSWORD: qwe123asd
+      POSTGRES_DB: placefinder_db
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./init.sql:/docker-entrypoint-initdb.d/init.sql
+
+  # Cache & Real-time: Redis
+  redis:
+    image: redis:7-alpine
+    container_name: placefinder_redis
+    ports:
+      - "6379:6379"
+
+  # API: Node.js (TypeScript)
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: placefinder_api
+    depends_on:
+      - db
+      - redis
+    environment:
+      DATABASE_URL: "postgresql://user:qwe123asd@db:5432/placefinder_db?schema=public"
+      REDIS_URL: "redis://redis:6379"
+    ports:
+      - "3000:3000"
+
+  
+
+volumes:
+  postgres_data:
