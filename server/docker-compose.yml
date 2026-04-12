@@ -1,6 +1,6 @@
 
 services:
-  # Database: PostGIS (PostgreSQL with Spatial Extensions)
+  # Veritabanı: PostGIS (Konumsal Uzantılara Sahip PostgreSQL)
   db:
     image: postgis/postgis:15-3.3-alpine
     container_name: placefinder_db
@@ -15,14 +15,14 @@ services:
       - postgres_data:/var/lib/postgresql/data
       - ./init.sql:/docker-entrypoint-initdb.d/init.sql
 
-  # Cache & Real-time: Redis
+  # Önbellek ve Gerçek Zamanlı: Redis
   redis:
     image: redis:7-alpine
     container_name: placefinder_redis
     ports:
       - "6379:6379"
 
-  # API: Node.js (TypeScript)
+  # API Sunucusu: Node.js (TypeScript)
   api:
     build:
       context: .

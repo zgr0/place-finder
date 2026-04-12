@@ -1,7 +1,7 @@
 import { readFileSync } from 'fs';
 import { join } from 'path';
 
-// Define types for GeoJSON structure
+// GeoJSON yapısı için türleri tanımla
 interface GeoJsonFeature {
   type: 'Feature';
   properties: Record<string, any>;
@@ -27,17 +27,20 @@ interface CafeInfo {
 }
 
 /**
- * Parses the cafe.geojson file and returns the GeoJSON data
- * @returns The parsed GeoJSON FeatureCollection
+ * cafe.geojson dosyasını ayrıştırır ve GeoJSON verilerini döndürür
+ * @returns Ayrıştırılmış GeoJSON FeatureCollection öğesi
  */
 export function parseCafeGeoJson(): GeoJsonFeatureCollection {
   try {
-    // Use __dirname to get the directory of the compiled file (dist folder)
-    // Then navigate up and into src folder where cafe.geojson is located
-    const filePath = join(__dirname, '..', 'src', 'cafe.geojson');
+    // Derlenmiş dosyanın dizinini (dist klasörü) almak için __dirname kullan
+    // Ardından yukarı çıkıp cafe.geojson'un bulunduğu src klasörüne gezin
+    let filePath = join(__dirname, 'src', 'cafe.geojson');
+    if (!require('fs').existsSync(filePath)) {
+      filePath = join(__dirname, '..', 'src', 'cafe.geojson');
+    }
     const data = readFileSync(filePath, 'utf-8');
     const geoJson: GeoJsonFeatureCollection = JSON.parse(data);
-    return geoJson; // Return the FeatureCollection
+    return geoJson; // FeatureCollection'ı döndür
   } catch (error) {
     console.error('Error parsing cafe.geojson:', error);
     throw error;
@@ -45,7 +48,7 @@ export function parseCafeGeoJson(): GeoJsonFeatureCollection {
 }
 
 /**
- * Example usage: Get all cafe features
+ * Örnek kullanım: Tüm kafe özelliklerini al
  */
 export function getCafes(): GeoJsonFeature[] {
   const geoJson = parseCafeGeoJson();
@@ -53,7 +56,7 @@ export function getCafes(): GeoJsonFeature[] {
 }
 
 /**
- * Get simplified cafe info with just name, type, and coordinates
+ * Yalnızca ad, tür ve koordinatları içeren basitleştirilmiş kafe bilgisini al
  */
 export function getCafeInfo(): CafeInfo[] {
   const cafes = getCafes();
@@ -64,4 +67,4 @@ export function getCafeInfo(): CafeInfo[] {
   }));
 }
 
-console.log(getCafeInfo());
+//console.log(getCafeInfo());

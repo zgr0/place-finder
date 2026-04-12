@@ -19,7 +19,7 @@ const url = `https://overpass-api.de/api/interpreter?data=${encodeURIComponent(q
 
 async function generateSQL() {
   try {
-    console.log("🚀 Fetching real-world data from OpenStreetMap...");
+    console.log("Fetching real-world data from OpenStreetMap");
     const response = await axios.get(url);
     const elements = response.data.elements;
 
@@ -43,10 +43,10 @@ async function generateSQL() {
     });
 
     fs.writeFileSync('seed_venues.sql', sqlStatements);
-    console.log(`✅ Success! Generated seed_venues.sql with ${elements.length} real locations.`);
-    console.log(`📍 Area: Kadıköy/Moda`);
+    console.log(`Success! Generated seed_venues.sql with ${elements.length} real locations.`);
+    console.log(`Area: Kadıköy/Moda`);
   } catch (error) {
-    console.error("❌ Error fetching data:", error.message);
+    console.error("Error fetching data:", error.message);
   }
 }
 

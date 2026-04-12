@@ -6,7 +6,7 @@ RUN npm install
 COPY . .
 RUN npx prisma generate
 RUN npm run build
-
+RUN npm install h3-js
 # Stage 2: Run
 FROM node:22-alpine
 WORKDIR /server

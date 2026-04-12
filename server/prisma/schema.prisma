@@ -10,8 +10,8 @@ datasource db {
 
 model Faction {
   id          Int      @id @default(autoincrement())
-  name        String   @unique // e.g., "The Blue Sentinels"
-  color       String   // e.g., "#0000FF"
+  name        String   @unique // örn. "Mavi "
+  color       String   // örn. "#0000FF"
   users       User[]
   hexesOwned  Int      @default(0)
 }
@@ -32,13 +32,13 @@ model User {
 model Venue {
   id          Int      @id @default(autoincrement())
   name        String
-  category    String   // e.g., "Cafe", "Library"
+  category    String   // örn. "Kafe", "Kütüphane"
   address     String?
   
-  // Uber H3 Index - Crucial for the "GÜÇLÜ" Grade
-  h3Index     String   // The Hexagon ID at resolution 7 or 8
+  // Uber H3 İndeksi 
+  h3Index     String   // Çözünürlük 7 veya 8'deki Altıgen Kimliği
   
-  // PostGIS Point - Storing Lat/Lng as a geometry for spatial queries
+  // PostGIS Noktası - Konumsal sorgular için Enlem/Boylam bilgisini geometri olarak kaydetme
   location    Unsupported("geometry(Point, 4326)") 
   
   visits      Visit[]

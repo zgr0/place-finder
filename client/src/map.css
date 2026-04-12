@@ -1,9 +1,11 @@
 .map-wrap {
   position: relative;
   width: 100%;
-  height: calc(
-    100vh - 77px
-  ); /* calculate height of the screen minus the heading */
+  min-height: calc(100vh - 120px);
+  border-radius: 28px;
+  overflow: hidden;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  box-shadow: 0 28px 95px rgba(15, 23, 42, 0.35);
 }
 
 .map {
