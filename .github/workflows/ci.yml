@@ -1,0 +1,51 @@
+name: Backend CI Pipeline
+
+# Bu süreç hangi durumlarda tetiklenecek?
+on:
+  push:
+    branches: [ "main", "master" ]
+  pull_request:
+    branches: [ "main", "master" ]
+
+# Çalışacak işler
+jobs:
+  build-and-test:
+    runs-on: ubuntu-latest
+
+    # Sunucunun ortam değişkenleri (Test veritabanı simülasyonu için)
+    env:
+      DATABASE_URL: "postgresql://dummy:dummy@localhost/dummy" 
+      NODE_ENV: "test"
+
+    steps:
+    # 1. Aşama: Kodun sunucuya indirilmesi
+    - name: Checkout Repository
+      uses: actions/checkout@v4
+
+    # 2. Aşama: Node.js ortamının hazırlanması
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '20'
+        cache: 'npm'
+        cache-dependency-path: './server/package-lock.json' 
+
+    # 3. Aşama: Bağımlılıkların (Dependencies) yüklenmesi
+    - name: Install Dependencies
+      working-directory: ./server
+      run: npm install
+
+    # 4. Aşama: Prisma İstemci (Client) oluşturulması
+    - name: Generate Prisma Client
+      working-directory: ./server
+      run: npx prisma generate
+
+    # 5. Aşama: TypeScript'ten JavaScript'e derleme (Syntax hataları varsa burada patlar)
+    - name: Build TypeScript
+      working-directory: ./server
+      run: npm run build
+
+    # 6. Aşama: Birim testlerin çalıştırılması
+    - name: Run Unit Tests
+      working-directory: ./server
+      run: npm test

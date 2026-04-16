@@ -6,12 +6,12 @@ import { PrismaClient } from '@prisma/client';
 import { PrismaPg } from '@prisma/adapter-pg';
 import { parseCafeGeoJson } from './parser';
 
-if (!process.env.DATABASE_URL) {
+if (process.env.NODE_ENV !== 'test' && !process.env.DATABASE_URL) {
   throw new Error('DATABASE_URL must be set in environment variables');
 }
 
 const app = express();
-const adapter = new PrismaPg({ connectionString: process.env.DATABASE_URL });
+const adapter = new PrismaPg({ connectionString: process.env.DATABASE_URL || 'postgres://dummy:dummy@localhost/dummy' });
 const prisma = new PrismaClient({ adapter });
 const port = process.env.PORT || 3000;
 
@@ -143,6 +143,10 @@ app.post('/territory/ownership', async (req: Request, res: Response) => {
   }
 });
 
-app.listen(port, () => {
-  console.log(`Server running on port ${port}`);
-});
+if (process.env.NODE_ENV !== 'test') {
+  app.listen(port, () => {
+    console.log(`Server running on port ${port}`);
+  });
+}
+
+export default app;
