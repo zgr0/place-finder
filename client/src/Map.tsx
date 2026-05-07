@@ -7,6 +7,7 @@ export default function Map() {
   const mapContainer = useRef<HTMLDivElement | null>(null);
   const map = useRef<maplibregl.Map | null>(null);
   const [mapError, setMapError] = useState<string | null>(null);
+  const [isLoadingMap, setIsLoadingMap] = useState(true);
   const lng = 29.0267;
   const lat = 40.9882;
   const zoom = 14;
@@ -163,6 +164,8 @@ export default function Map() {
       } catch (error) {
         console.error('Error fetching or adding venues:', error);
         setMapError('Failed to load venue data from the server.');
+      } finally {
+        setIsLoadingMap(false);
       }
     });
 
@@ -199,6 +202,12 @@ export default function Map() {
 
   return (
     <div className="map-wrap">
+      {isLoadingMap && (
+        <div className="map-loading-overlay">
+          <div className="loader" style={{width: '32px', height: '32px'}}></div>
+          <div>Loading Map & Venues...</div>
+        </div>
+      )}
       <div ref={mapContainer} className="map" />
     </div>
   );

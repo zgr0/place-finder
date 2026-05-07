@@ -81,9 +81,13 @@ const Register = () => {
           {error && <div className="status-text status-error">{error}</div>}
 
           <button className="button-primary" disabled={isLoading}>
-            {isLoading ? 'Registering' : 'Initialize account'}
+            {isLoading ? <span className="loader" style={{width: '18px', height: '18px', borderWidth: '2px'}}></span> : null}
+            {isLoading ? 'Registering...' : 'Initialize Account'}
           </button>
         </form>
+        <div className="mt-4 text-center text-sm text-slate-400">
+          Already have an account? <a href="/login" className="button-secondary">Sign In</a>
+        </div>
       </div>
     </div>
   );

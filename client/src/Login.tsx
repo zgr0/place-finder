@@ -62,11 +62,12 @@ const Login = () => {
           {success && <div className="status-text status-success">{success}</div>}
           {error && <div className="status-text status-error">{error}</div>}
           <button className="button-primary" disabled={isLoading}>
-            {isLoading ? 'Signing in' : 'SIGN IN'}
+            {isLoading ? <span className="loader" style={{width: '18px', height: '18px', borderWidth: '2px'}}></span> : null}
+            {isLoading ? 'Signing in...' : 'SIGN IN'}
           </button>
         </form>
-        <div className="mt-4 text-sm text-slate-400">
-          Don&apos;t have an account? <Link to="/register" className="app-nav-link button-secondary">Register</Link>
+        <div className="mt-4 text-center text-sm text-slate-400">
+          Don&apos;t have an account? <Link to="/register" className="button-secondary">Register</Link>
         </div>
       </div>
     </div>
