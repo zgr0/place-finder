@@ -25,7 +25,7 @@ model User {
   factionId   Int
   totalPoints Int       @default(0)
   level       Int       @default(1)
-  visits      Visit[]
+  reviews     Review[]
   createdAt   DateTime  @default(now())
 }
 
@@ -41,17 +41,18 @@ model Venue {
   // PostGIS Noktası - Konumsal sorgular için Enlem/Boylam bilgisini geometri olarak kaydetme
   location    Unsupported("geometry(Point, 4326)") 
   
-  visits      Visit[]
+  reviews     Review[]
 
   @@index([h3Index])
 }
 
-model Visit {
+model Review {
   id        Int      @id @default(autoincrement())
   user      User     @relation(fields: [userId], references: [id])
   userId    Int
   venue     Venue    @relation(fields: [venueId], references: [id])
   venueId   Int
-  points    Int      @default(10)
+  rating    Int      @default(5)
+  content   String?
   createdAt DateTime @default(now())
 }

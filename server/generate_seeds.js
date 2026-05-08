@@ -20,10 +20,13 @@ const url = `https://overpass-api.de/api/interpreter?data=${encodeURIComponent(q
 async function generateSQL() {
   try {
     console.log("Fetching real-world data from OpenStreetMap");
-    const response = await axios.get(url);
+    const response = await axios.get(url, {
+      headers: { 'User-Agent': 'PlaceFinderSeedScript/1.0 (contact@placefinder.com)' }
+    });
     const elements = response.data.elements;
 
     let sqlStatements = `-- ECHELON Venue Seed Data\n`;
+    sqlStatements += `DELETE FROM "Review"; -- Clear reviews due to FK\n`;
     sqlStatements += `DELETE FROM "Venue"; -- Clear old data\n\n`;
 
     elements.forEach((el) => {

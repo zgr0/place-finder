@@ -181,22 +181,22 @@ describe('Backend API Endpoints', () => {
   });
 
   describe('POST /territory/ownership', () => {
-    it('should properly calculate dominant faction for requested hexes via database visits aggregation', async () => {
-      // Hex "hex1" has visits from faction 1 (10 pts) and faction 2 (20 pts) -> Faction 2 should win
-      // Hex "hex2" has visits from faction 1 (15 pts) and faction 3 (5 pts) -> Faction 1 should win
+    it('should properly calculate dominant faction for requested hexes via database reviews aggregation', async () => {
+      // Hex "hex1" has reviews from faction 1 (10 pts) and faction 2 (20 pts) -> Faction 2 should win
+      // Hex "hex2" has reviews from faction 1 (15 pts) and faction 3 (5 pts) -> Faction 1 should win
       const mockVenues = [
         {
           h3Index: 'hex1',
-          visits: [
-            { points: 10, user: { factionId: 1 } },
-            { points: 20, user: { factionId: 2 } },
+          reviews: [
+            { rating: 10, user: { factionId: 1 } },
+            { rating: 20, user: { factionId: 2 } },
           ],
         },
         {
           h3Index: 'hex2',
-          visits: [
-            { points: 15, user: { factionId: 1 } },
-            { points: 5, user: { factionId: 3 } },
+          reviews: [
+            { rating: 15, user: { factionId: 1 } },
+            { rating: 5, user: { factionId: 3 } },
           ],
         },
       ];
@@ -223,9 +223,9 @@ describe('Backend API Endpoints', () => {
       const mockVenues = [
         {
           h3Index: 'hexTie',
-          visits: [
-            { points: 15, user: { factionId: 1 } },
-            { points: 15, user: { factionId: 2 } },
+          reviews: [
+            { rating: 15, user: { factionId: 1 } },
+            { rating: 15, user: { factionId: 2 } },
           ]
         }
       ];

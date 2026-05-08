@@ -22,6 +22,10 @@ const Login = () => {
       });
 
       if (res.ok) {
+        const data = await res.json();
+        localStorage.setItem('userId', data.id);
+        localStorage.setItem('username', data.username);
+        window.dispatchEvent(new Event('auth-change'));
         setSuccess('Login successful! Redirecting');
         setTimeout(() => navigate('/'), 500);
         return;

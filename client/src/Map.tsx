@@ -2,18 +2,30 @@ import { useRef, useEffect, useState } from 'react';
 import maplibregl from 'maplibre-gl';
 import 'maplibre-gl/dist/maplibre-gl.css';
 import './map.css';
+import ReviewModal from './Review';
+
+declare global {
+  interface Window {
+    openReviewModal: (venueName: string) => void;
+  }
+}
 
 export default function Map() {
   const mapContainer = useRef<HTMLDivElement | null>(null);
   const map = useRef<maplibregl.Map | null>(null);
   const [mapError, setMapError] = useState<string | null>(null);
   const [isLoadingMap, setIsLoadingMap] = useState(true);
+  const [selectedVenueForReview, setSelectedVenueForReview] = useState<string | null>(null);
   const lng = 29.0267;
   const lat = 40.9882;
   const zoom = 14;
   const API_KEY = import.meta.env.VITE_MAPTILER_KEY;
 
   useEffect(() => {
+    window.openReviewModal = (venueName) => {
+      setSelectedVenueForReview(venueName);
+    };
+
     if (map.current || !mapContainer.current) return;
 
     const supportsWebGL = () => {
@@ -96,13 +108,17 @@ export default function Map() {
           closeOnClick: false,
         });
 
+        let popupTimeout: ReturnType<typeof setTimeout>;
+
         currentMap.on('mouseenter', 'venue-dots', () => {
           currentMap.getCanvas().style.cursor = 'pointer';
         });
 
         currentMap.on('mouseleave', 'venue-dots', () => {
           currentMap.getCanvas().style.cursor = '';
-          hoverPopup.remove();
+          popupTimeout = setTimeout(() => {
+            hoverPopup.remove();
+          }, 300);
         });
 
         currentMap.on('mousemove', 'venue-dots', (e) => {
@@ -124,42 +140,38 @@ export default function Map() {
           html += `<div style="font-size: 12px;">${address}</div>`;
           html += `<div style="font-size: 12px;">${hours}</div>`;
           html += `<div style="font-size: 12px;">${phone}</div>`;
-          html += `<div style="font-size: 12px; color: ${props.website ? '#0066cc' : '#999'};">${websiteText}</div>`;
+          if (props.website) {
+            html += `<div style="font-size: 12px;"><a href="${props.website.startsWith('http') ? props.website : 'https://' + props.website}" target="_blank" rel="noopener noreferrer" style="color: #3b82f6;">Visit Website</a></div>`;
+          } else {
+            html += `<div style="font-size: 12px; color: #999;">No website</div>`;
+          }
+
+          if (props['brand:wikipedia']) {
+            html += `<div style="font-size: 12px;"><a href="https://${props['brand:wikipedia'].replace(':', '.wikipedia.org/wiki/')}" target="_blank" rel="noopener noreferrer" style="color: #3b82f6;">Wikipedia Info</a></div>`;
+          } else {
+            html += `<div style="font-size: 12px; color: #999;">No Wiki info</div>`;
+          }
+          
+          html += `<div style="margin-top: 12px; text-align: center;"><button onclick="window.openReviewModal('${(props.name || 'Unknown Venue').replace(/'/g, "\\'")}')" style="display: inline-block; background-color: #3b82f6; color: white; padding: 8px 16px; border: none; border-radius: 6px; cursor: pointer; font-weight: bold; width: 100%; transition: background-color 0.2s;">View & Write Reviews</button></div>`;
           html += `</div>`;
 
+          clearTimeout(popupTimeout);
           hoverPopup
             .setLngLat(coordinates)
             .setHTML(html)
             .addTo(currentMap);
-        });
-
-        currentMap.on('click', 'venue-dots', (e) => {
-          const feature = e.features?.[0];
-          if (!feature) return;
-
-          const props = feature.properties as Record<string, any>;
-          const coordinates = (feature.geometry as any).coordinates;
-
-          let clickHtml = `<div style="font-family: inherit; padding: 4px; display: flex; flex-direction: column; gap: 6px;">`;
-          clickHtml += `<strong style="font-size: 14px;">${props.name || 'Unknown Venue'}</strong>`;
-          
-          if (props.website) {
-            clickHtml += `<div style="font-size: 13px;"><a href="${props.website.startsWith('http') ? props.website : 'https://' + props.website}" target="_blank" rel="noopener noreferrer">Visit Website</a></div>`;
-          } else {
-            clickHtml += `<div style="font-size: 13px; color: #999;">No website</div>`;
+            
+          const popupEl = hoverPopup.getElement();
+          if (popupEl) {
+            popupEl.addEventListener('mouseenter', () => {
+              clearTimeout(popupTimeout);
+            });
+            popupEl.addEventListener('mouseleave', () => {
+              popupTimeout = setTimeout(() => {
+                hoverPopup.remove();
+              }, 300);
+            });
           }
-
-          if (props['brand:wikipedia']) {
-            clickHtml += `<div style="font-size: 13px;"><a href="https://${props['brand:wikipedia'].replace(':', '.wikipedia.org/wiki/')}" target="_blank" rel="noopener noreferrer">Wikipedia Info</a></div>`;
-          } else {
-            clickHtml += `<div style="font-size: 13px; color: #999;">No Wiki info</div>`;
-          }
-          clickHtml += `</div>`;
-
-          new maplibregl.Popup()
-            .setLngLat(coordinates)
-            .setHTML(clickHtml)
-            .addTo(currentMap);
         });
       } catch (error) {
         console.error('Error fetching or adding venues:', error);
@@ -201,14 +213,22 @@ export default function Map() {
   }
 
   return (
-    <div className="map-wrap">
-      {isLoadingMap && (
-        <div className="map-loading-overlay">
-          <div className="loader" style={{width: '32px', height: '32px'}}></div>
-          <div>Loading Map & Venues...</div>
-        </div>
+    <>
+      <div className={`map-wrap ${selectedVenueForReview ? 'blur-sm transition-all duration-300' : 'transition-all duration-300'}`}>
+        {isLoadingMap && (
+          <div className="map-loading-overlay">
+            <div className="loader" style={{width: '32px', height: '32px'}}></div>
+            <div>Loading Map & Venues...</div>
+          </div>
+        )}
+        <div ref={mapContainer} className="map" />
+      </div>
+      {selectedVenueForReview && (
+        <ReviewModal 
+          venueName={selectedVenueForReview} 
+          onClose={() => setSelectedVenueForReview(null)} 
+        />
       )}
-      <div ref={mapContainer} className="map" />
-    </div>
+    </>
   );
 }

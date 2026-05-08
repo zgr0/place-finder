@@ -30,12 +30,13 @@ CREATE TABLE "Venue" (
     "location" GEOMETRY(Point, 4326) -- PostGIS Noktası
 );
 
--- 5. Ziyaretler Tablosunu Oluştur (Keşif Günlüğü)
-CREATE TABLE "Visit" (
+-- 5. Ziyaretler Tablosunu Oluştur (Keşif Günlüğü) -> Reviews
+CREATE TABLE "Review" (
     "id" SERIAL PRIMARY KEY,
     "userId" INTEGER REFERENCES "User"(id),
     "venueId" INTEGER REFERENCES "Venue"(id),
-    "points" INTEGER DEFAULT 10,
+    "rating" INTEGER DEFAULT 5,
+    "content" TEXT,
     "createdAt" TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 

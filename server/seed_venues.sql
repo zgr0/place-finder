@@ -1,4 +1,5 @@
 -- ECHELON Venue Seed Data
+DELETE FROM "Review"; -- Clear reviews due to FK
 DELETE FROM "Venue"; -- Clear old data
 
 INSERT INTO "Venue" (name, category, "h3Index", location) VALUES ('Lita Mantı', 'restaurant', '891ec902ed7ffff', ST_SetSRID(ST_MakePoint(29.0235259, 40.98107), 4326));
@@ -252,7 +253,7 @@ INSERT INTO "Venue" (name, category, "h3Index", location) VALUES ('Dolce', 'cafe
 INSERT INTO "Venue" (name, category, "h3Index", location) VALUES ('Nadide breakfast', 'cafe', '891ec902167ffff', ST_SetSRID(ST_MakePoint(29.0226987, 40.9843986), 4326));
 INSERT INTO "Venue" (name, category, "h3Index", location) VALUES ('Mesadin Restaurant', 'restaurant', '891ec902177ffff', ST_SetSRID(ST_MakePoint(29.022669, 40.9888623), 4326));
 INSERT INTO "Venue" (name, category, "h3Index", location) VALUES ('Chocoport', 'cafe', '891ec90212fffff', ST_SetSRID(ST_MakePoint(29.028829, 40.9883577), 4326));
-INSERT INTO "Venue" (name, category, "h3Index", location) VALUES ('Borsam Tasfirin', 'restaurant', '891ec90212bffff', ST_SetSRID(ST_MakePoint(29.0270148, 40.9896288), 4326));
+INSERT INTO "Venue" (name, category, "h3Index", location) VALUES ('Borsam Taşfırın', 'restaurant', '891ec90212bffff', ST_SetSRID(ST_MakePoint(29.0270148, 40.9896288), 4326));
 INSERT INTO "Venue" (name, category, "h3Index", location) VALUES ('Sakura', 'cafe', '891ec902167ffff', ST_SetSRID(ST_MakePoint(29.0234555, 40.9856577), 4326));
 INSERT INTO "Venue" (name, category, "h3Index", location) VALUES ('La Paz', 'cafe', '891ec902167ffff', ST_SetSRID(ST_MakePoint(29.0242948, 40.9854337), 4326));
 INSERT INTO "Venue" (name, category, "h3Index", location) VALUES ('muutto', 'cafe', '891ec902167ffff', ST_SetSRID(ST_MakePoint(29.0228731, 40.9857953), 4326));
@@ -323,7 +324,7 @@ INSERT INTO "Venue" (name, category, "h3Index", location) VALUES ('Asya cafe', '
 INSERT INTO "Venue" (name, category, "h3Index", location) VALUES ('Baraka cafe', 'cafe', '891ec902177ffff', ST_SetSRID(ST_MakePoint(29.0223798, 40.9888485), 4326));
 INSERT INTO "Venue" (name, category, "h3Index", location) VALUES ('Boom Chocolate Coffee', 'cafe', '891ec902177ffff', ST_SetSRID(ST_MakePoint(29.0224031, 40.9888844), 4326));
 INSERT INTO "Venue" (name, category, "h3Index", location) VALUES ('6üstü cafe', 'cafe', '891ec902177ffff', ST_SetSRID(ST_MakePoint(29.0235237, 40.9882885), 4326));
-INSERT INTO "Venue" (name, category, "h3Index", location) VALUES ('Turp', 'restaurant', '891ec902167ffff', ST_SetSRID(ST_MakePoint(29.0232763, 40.9851717), 4326));
+INSERT INTO "Venue" (name, category, "h3Index", location) VALUES ('Turp', 'restaurant', '891ec902167ffff', ST_SetSRID(ST_MakePoint(29.0232837, 40.9851279), 4326));
 INSERT INTO "Venue" (name, category, "h3Index", location) VALUES ('Moda Da Nata', 'cafe', '891ec902e93ffff', ST_SetSRID(ST_MakePoint(29.0273126, 40.9859545), 4326));
 INSERT INTO "Venue" (name, category, "h3Index", location) VALUES ('Healty & Happt Ekolojik Kitchen', 'restaurant', '891ec902e93ffff', ST_SetSRID(ST_MakePoint(29.0274276, 40.9859056), 4326));
 INSERT INTO "Venue" (name, category, "h3Index", location) VALUES ('Wayana', 'restaurant', '891ec902ed7ffff', ST_SetSRID(ST_MakePoint(29.0226578, 40.9812996), 4326));
@@ -498,12 +499,14 @@ INSERT INTO "Venue" (name, category, "h3Index", location) VALUES ('Vivi', 'cafe'
 INSERT INTO "Venue" (name, category, "h3Index", location) VALUES ('Güneli Fırın', 'restaurant', '891ec902123ffff', ST_SetSRID(ST_MakePoint(29.0289062, 40.9920255), 4326));
 INSERT INTO "Venue" (name, category, "h3Index", location) VALUES ('Coffee Kolf', 'cafe', '891ec902ea3ffff', ST_SetSRID(ST_MakePoint(29.042027, 40.9780873), 4326));
 INSERT INTO "Venue" (name, category, "h3Index", location) VALUES ('Porto Napoli Pizza', 'restaurant', '891ec9021afffff', ST_SetSRID(ST_MakePoint(29.0291223, 40.9956595), 4326));
-INSERT INTO "Venue" (name, category, "h3Index", location) VALUES ('Hebun Çorba Evi', 'restaurant', '891ec902ccbffff', ST_SetSRID(ST_MakePoint(29.0363332, 40.9926886), 4326));
+INSERT INTO "Venue" (name, category, "h3Index", location) VALUES ('Hebun Çorba Evi', 'restaurant', '891ec902ccbffff', ST_SetSRID(ST_MakePoint(29.0363148, 40.9926672), 4326));
 INSERT INTO "Venue" (name, category, "h3Index", location) VALUES ('Kahramanmaraş Usulü Kelle Paça', 'restaurant', '891ec902c4fffff', ST_SetSRID(ST_MakePoint(29.0403206, 40.9834645), 4326));
 INSERT INTO "Venue" (name, category, "h3Index", location) VALUES ('Florida Coffee', 'cafe', '891ec902127ffff', ST_SetSRID(ST_MakePoint(29.0320478, 40.9915295), 4326));
 INSERT INTO "Venue" (name, category, "h3Index", location) VALUES ('Sütçüoğulları Muhallebicisi', 'cafe', '891ec902127ffff', ST_SetSRID(ST_MakePoint(29.0320238, 40.9917376), 4326));
 INSERT INTO "Venue" (name, category, "h3Index", location) VALUES ('Selim Kebap Kadıköy', 'restaurant', '891ec902c5bffff', ST_SetSRID(ST_MakePoint(29.0349704, 40.987563), 4326));
 INSERT INTO "Venue" (name, category, "h3Index", location) VALUES ('Fazıl Bey''in Türk Kahvesi', 'cafe', '891ec90213bffff', ST_SetSRID(ST_MakePoint(29.024756, 40.9903913), 4326));
 INSERT INTO "Venue" (name, category, "h3Index", location) VALUES ('Scald', 'cafe', '891ec902137ffff', ST_SetSRID(ST_MakePoint(29.0298047, 40.994487), 4326));
-INSERT INTO "Venue" (name, category, "h3Index", location) VALUES ('ARABICA Coffee House', 'cafe', '891ec902c53ffff', ST_SetSRID(ST_MakePoint(29.0373698, 40.990466), 4326));
+INSERT INTO "Venue" (name, category, "h3Index", location) VALUES ('Arabica', 'cafe', '891ec902c53ffff', ST_SetSRID(ST_MakePoint(29.0373698, 40.990466), 4326));
 INSERT INTO "Venue" (name, category, "h3Index", location) VALUES ('Mantı Point', 'restaurant', '891ec902127ffff', ST_SetSRID(ST_MakePoint(29.0313802, 40.9902601), 4326));
+INSERT INTO "Venue" (name, category, "h3Index", location) VALUES ('Hoş Sefa Lokantası', 'restaurant', '891ec902137ffff', ST_SetSRID(ST_MakePoint(29.0301269, 40.9940057), 4326));
+INSERT INTO "Venue" (name, category, "h3Index", location) VALUES ('Shvili - Georgian Bistro', 'restaurant', '891ec902ccbffff', ST_SetSRID(ST_MakePoint(29.0368043, 40.9922935), 4326));

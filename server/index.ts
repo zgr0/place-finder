@@ -94,9 +94,9 @@ app.post('/territory/ownership', async (req: Request, res: Response) => {
       where: { h3Index: { in: hexIds } },
       select: {
         h3Index: true,
-        visits: {
+        reviews: {
           select: {
-            points: true,
+            rating: true,
             user: { select: { factionId: true } }
           }
         }
@@ -110,9 +110,9 @@ app.post('/territory/ownership', async (req: Request, res: Response) => {
         hexScores[venue.h3Index] = {};
       }
 
-      for (const visit of venue.visits) {
-        const factionId = visit.user.factionId;
-        hexScores[venue.h3Index][factionId] = (hexScores[venue.h3Index][factionId] || 0) + visit.points;
+      for (const review of venue.reviews) {
+        const factionId = review.user.factionId;
+        hexScores[venue.h3Index][factionId] = (hexScores[venue.h3Index][factionId] || 0) + review.rating;
       }
     }
 
@@ -140,6 +140,65 @@ app.post('/territory/ownership', async (req: Request, res: Response) => {
   } catch (error) {
     console.error('Error calculating territory ownership:', error);
     res.status(500).json({ error: 'Failed to calculate territory ownership' });
+  }
+});
+
+app.get('/reviews/:venueName', async (req: Request, res: Response) => {
+  const { venueName } = req.params;
+  try {
+    const venue = await prisma.venue.findFirst({
+      where: { name: venueName },
+      include: {
+        reviews: {
+          include: {
+            user: { select: { username: true, factionId: true } }
+          },
+          orderBy: { createdAt: 'desc' }
+        }
+      }
+    });
+
+    if (!venue) {
+      return res.status(404).json({ error: 'Venue not found' });
+    }
+
+    return res.status(200).json(venue.reviews);
+  } catch (error) {
+    console.error('Error fetching reviews:', error);
+    return res.status(500).json({ error: 'Failed to fetch reviews' });
+  }
+});
+
+app.post('/reviews', async (req: Request, res: Response) => {
+  const { userId, venueName, rating, content } = req.body;
+
+  if (!userId || !venueName || typeof rating !== 'number') {
+    return res.status(400).json({ error: 'userId, venueName, and rating are required' });
+  }
+
+  try {
+    // Bulabildiğimiz ilk venue'yu alalım (ismi eşleşen)
+    const venue = await prisma.venue.findFirst({
+      where: { name: venueName }
+    });
+
+    if (!venue) {
+      return res.status(404).json({ error: 'Venue not found' });
+    }
+
+    const review = await prisma.review.create({
+      data: {
+        userId,
+        venueId: venue.id,
+        rating,
+        content
+      }
+    });
+
+    return res.status(201).json(review);
+  } catch (error) {
+    console.error('Error creating review:', error);
+    return res.status(500).json({ error: 'Failed to create review' });
   }
 });
 

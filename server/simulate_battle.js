@@ -51,15 +51,17 @@ async function simulate() {
         const randomUser = users[Math.floor(Math.random() * users.length)];
         const randomVenue = venues[Math.floor(Math.random() * venues.length)];
 
-        await prisma.visit.create({
+        await prisma.review.create({
             data: {
                 userId: randomUser.id,
                 venueId: randomVenue.id,
+                rating: Math.floor(Math.random() * 5) + 1,
+                content: "Simulation review",
             }
         });
 
         // "Savaş" (Savaş) ilerlemesini günlüğe kaydet
-        console.log(`[Step ${i + 1}/200] User ${randomUser.username} (Faction ${randomUser.factionId}) checked into ${randomVenue.name}`);
+        console.log(`[Step ${i + 1}/200] User ${randomUser.username} (Faction ${randomUser.factionId}) reviewed ${randomVenue.name}`);
 
         // İsteğe bağlı: Haritanızda "canlı" olarak güncellenmesini izlemek için küçük bir gecikme ekleyin
         await new Promise(resolve => setTimeout(resolve, 100));
