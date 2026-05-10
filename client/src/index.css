@@ -9,6 +9,12 @@
   color-scheme: dark;
 }
 
+:root[data-theme="light"] {
+  color: #0f172a;
+  background: #f8fafc;
+  color-scheme: light;
+}
+
 html {
   scroll-behavior: smooth;
   min-height: 100%;
@@ -22,6 +28,13 @@ body {
     linear-gradient(180deg, #020617 0%, #060a17 100%);
   color: #f8fafc;
   -webkit-font-smoothing: antialiased;
+}
+
+body[data-theme="light"] {
+  background: radial-gradient(circle at top left, rgba(6, 182, 212, 0.1), transparent 30%),
+    radial-gradient(circle at bottom right, rgba(99, 102, 241, 0.1), transparent 30%),
+    linear-gradient(180deg, #f8fafc 0%, #e2e8f0 100%);
+  color: #0f172a;
 }
 
 #root {

@@ -9,6 +9,17 @@ import Register from './Register'
 function App() {
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [user, setUser] = useState<{ id: string, username: string } | null>(null);
+  const [theme, setTheme] = useState(localStorage.getItem('theme') || 'dark');
+
+  useEffect(() => {
+    document.documentElement.setAttribute('data-theme', theme);
+    document.body.setAttribute('data-theme', theme);
+    localStorage.setItem('theme', theme);
+  }, [theme]);
+
+  const toggleTheme = () => {
+    setTheme(prev => prev === 'dark' ? 'light' : 'dark');
+  };
 
   const toggleSidebar = () => setIsSidebarOpen(!isSidebarOpen);
 
@@ -54,6 +65,15 @@ function App() {
             <span className="nav-icon">⬡</span> Hex Grid
           </Link>
           <div className="nav-divider"></div>
+
+          <button 
+            className="app-nav-link" 
+            onClick={toggleTheme}
+            style={{ background: 'transparent', width: '100%', textAlign: 'left', cursor: 'pointer', border: '1px solid transparent' }}
+          >
+            <span className="nav-icon">{theme === 'dark' ? '☀️' : '🌙'}</span> 
+            {theme === 'dark' ? 'Light Mode' : 'Dark Mode'}
+          </button>
           
           {user ? (
             <div style={{ marginTop: 'auto', display: 'flex', flexDirection: 'column', gap: '0.5rem', padding: '0.5rem' }}>
@@ -63,7 +83,7 @@ function App() {
                 </div>
                 <div style={{ display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
                   <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)', fontWeight: '500' }}>Logged in as</span>
-                  <span style={{ color: 'white', fontWeight: '600', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: '140px' }}>{user.username}</span>
+                  <span style={{ color: 'var(--text-main)', fontWeight: '600', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: '140px' }}>{user.username}</span>
                 </div>
               </div>
               <button 
