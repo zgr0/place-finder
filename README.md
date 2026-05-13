@@ -9,12 +9,17 @@ Gerçek zamanlı konum verilerini ve mekansal indeksleme teknolojilerini kullana
    - `npm install`
    - `npm run dev`
 
-2. İstemciyi başlatın:
+2. İstemciyi başlatın (Web):
    - `cd client`
    - `npm install`
    - `npm run dev`
 
-3. Tarayıcınızda `http://localhost:5173` adresini açın.
+3. Mobil uygulamayı başlatın (React Native/Expo):
+   - `cd mobile`
+   - `npm install`
+   - `npm run start`
+
+4. Tarayıcınızda `http://localhost:5173` adresini açın veya mobil cihazınızda/emülatörde Expo Go uygulamasını kullanarak mobil uygulamayı test edin.
 
 ## Özellikler
 
