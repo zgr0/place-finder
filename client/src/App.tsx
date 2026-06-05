@@ -5,6 +5,7 @@ import Map from './Map'
 import MapGrid from './mapgrid'
 import Login from './Login'
 import Register from './Register'
+import Profile from './Profile'
 
 function App() {
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
@@ -64,6 +65,11 @@ function App() {
           <Link to="/hex" className="app-nav-link" onClick={() => setIsSidebarOpen(false)}>
             <span className="nav-icon">⬡</span> Hex Grid
           </Link>
+          {user && (
+            <Link to="/profile" className="app-nav-link" onClick={() => setIsSidebarOpen(false)}>
+              <span className="nav-icon">👤</span> Profile
+            </Link>
+          )}
           <div className="nav-divider"></div>
 
           <button 
@@ -117,6 +123,7 @@ function App() {
           <Route path="/map" element={<Map />} />
           <Route path="/login" element={<Login />} />
           <Route path="/register" element={<Register />} />
+          <Route path="/profile" element={<Profile />} />
         </Routes>
       </main>
     </div>

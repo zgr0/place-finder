@@ -16,7 +16,7 @@ const prisma = new PrismaClient({ adapter });
 const port = process.env.PORT || 3000;
 
 app.use(cors());
-app.use(express.json());
+app.use(express.json({ limit: '5mb' }));
 
 app.get('/venues', (req: Request, res: Response) => {
   try {
@@ -199,6 +199,102 @@ app.post('/reviews', async (req: Request, res: Response) => {
   } catch (error) {
     console.error('Error creating review:', error);
     return res.status(500).json({ error: 'Failed to create review' });
+  }
+});
+
+app.get('/users/:userId/profile', async (req: Request, res: Response) => {
+  const userId = parseInt(req.params.userId, 10);
+  if (isNaN(userId)) return res.status(400).json({ error: 'Invalid userId' });
+
+  try {
+    const user = await prisma.user.findUnique({
+      where: { id: userId },
+      include: {
+        faction: true,
+        reviews: {
+          include: { venue: { select: { name: true } } },
+          orderBy: { createdAt: 'desc' },
+        },
+      },
+    });
+
+    if (!user) return res.status(404).json({ error: 'User not found' });
+
+    // Streak: consecutive days with at least one first-ever venue discovery
+    const allReviews = [...user.reviews].reverse(); // oldest first
+    const firstDiscoveries = new Map<number, Date>();
+    for (const review of allReviews) {
+      if (!firstDiscoveries.has(review.venueId)) {
+        firstDiscoveries.set(review.venueId, review.createdAt);
+      }
+    }
+
+    const discoveryDays = new Set<string>();
+    for (const date of firstDiscoveries.values()) {
+      discoveryDays.add(date.toISOString().split('T')[0]);
+    }
+
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    let streak = 0;
+    const checkDate = new Date(today);
+
+    if (!discoveryDays.has(checkDate.toISOString().split('T')[0])) {
+      checkDate.setDate(checkDate.getDate() - 1);
+    }
+    while (discoveryDays.has(checkDate.toISOString().split('T')[0])) {
+      streak++;
+      checkDate.setDate(checkDate.getDate() - 1);
+    }
+
+    const recentReviews = user.reviews.slice(0, 10).map(r => ({
+      id: r.id,
+      venueName: r.venue.name,
+      rating: r.rating,
+      content: r.content,
+      createdAt: r.createdAt,
+    }));
+
+    return res.json({
+      id: user.id,
+      username: user.username,
+      factionId: user.factionId,
+      factionName: user.faction.name,
+      factionColor: user.faction.color,
+      totalPoints: user.totalPoints,
+      level: user.level,
+      profilePicture: user.profilePicture,
+      streak,
+      recentReviews,
+    });
+  } catch (error) {
+    console.error('Error fetching profile:', error);
+    return res.status(500).json({ error: 'Failed to fetch profile' });
+  }
+});
+
+app.put('/users/:userId/profile-picture', async (req: Request, res: Response) => {
+  const userId = parseInt(req.params.userId, 10);
+  if (isNaN(userId)) return res.status(400).json({ error: 'Invalid userId' });
+
+  const { profilePicture } = req.body;
+  if (!profilePicture || typeof profilePicture !== 'string') {
+    return res.status(400).json({ error: 'profilePicture is required' });
+  }
+
+  if (!profilePicture.startsWith('data:image/')) {
+    return res.status(400).json({ error: 'Invalid image format' });
+  }
+
+  try {
+    await prisma.user.update({
+      where: { id: userId },
+      data: { profilePicture },
+    });
+    return res.json({ success: true });
+  } catch (error) {
+    console.error('Error updating profile picture:', error);
+    return res.status(500).json({ error: 'Failed to update profile picture' });
   }
 });
 

@@ -1,12 +1,13 @@
 # Stage 1: Build
 FROM node:22-alpine AS builder
 WORKDIR /server
+RUN apk add --no-cache python3 make g++
 COPY package*.json ./
-RUN npm install
+COPY prisma ./prisma
+RUN npm install --legacy-peer-deps
 COPY . .
 RUN npx prisma generate
 RUN npm run build
-RUN npm install h3-js
 # Stage 2: Run
 FROM node:22-alpine
 WORKDIR /server
@@ -14,6 +15,7 @@ COPY --from=builder /server/package*.json ./
 COPY --from=builder /server/node_modules ./node_modules
 COPY --from=builder /server/dist ./dist
 COPY --from=builder /server/prisma ./prisma
+COPY --from=builder /server/prisma.config.ts ./
 COPY --from=builder /server/src ./src
 
 EXPOSE 3000

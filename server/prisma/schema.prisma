@@ -17,16 +17,17 @@ model Faction {
 }
 
 model User {
-  id          Int       @id @default(autoincrement())
-  email       String    @unique
-  username    String    @unique
-  password    String
-  faction     Faction   @relation(fields: [factionId], references: [id])
-  factionId   Int
-  totalPoints Int       @default(0)
-  level       Int       @default(1)
-  reviews     Review[]
-  createdAt   DateTime  @default(now())
+  id             Int       @id @default(autoincrement())
+  email          String    @unique
+  username       String    @unique
+  password       String
+  faction        Faction   @relation(fields: [factionId], references: [id])
+  factionId      Int
+  totalPoints    Int       @default(0)
+  level          Int       @default(1)
+  profilePicture String?
+  reviews        Review[]
+  createdAt      DateTime  @default(now())
 }
 
 model Venue {
