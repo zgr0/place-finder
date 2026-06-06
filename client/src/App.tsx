@@ -6,10 +6,11 @@ import MapGrid from './mapgrid'
 import Login from './Login'
 import Register from './Register'
 import Profile from './Profile'
+import Faction from './Faction'
 
 function App() {
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
-  const [user, setUser] = useState<{ id: string, username: string } | null>(null);
+  const [user, setUser] = useState<{ id: string, username: string, factionId: number } | null>(null);
   const [theme, setTheme] = useState(localStorage.getItem('theme') || 'dark');
 
   useEffect(() => {
@@ -27,8 +28,9 @@ function App() {
   const checkAuth = () => {
     const id = localStorage.getItem('userId');
     const username = localStorage.getItem('username');
+    const factionId = parseInt(localStorage.getItem('factionId') || '0');
     if (id && username) {
-      setUser({ id, username });
+      setUser({ id, username, factionId });
     } else {
       setUser(null);
     }
@@ -43,6 +45,7 @@ function App() {
   const handleLogout = () => {
     localStorage.removeItem('userId');
     localStorage.removeItem('username');
+    localStorage.removeItem('factionId');
     window.dispatchEvent(new Event('auth-change'));
     setIsSidebarOpen(false);
     window.location.href = '/';
@@ -68,6 +71,11 @@ function App() {
           {user && (
             <Link to="/profile" className="app-nav-link" onClick={() => setIsSidebarOpen(false)}>
               <span className="nav-icon">👤</span> Profile
+            </Link>
+          )}
+          {user && (
+            <Link to="/faction" className="app-nav-link" onClick={() => setIsSidebarOpen(false)}>
+              <span className="nav-icon">⚔️</span> Faction Chat
             </Link>
           )}
           <div className="nav-divider"></div>
@@ -124,6 +132,7 @@ function App() {
           <Route path="/login" element={<Login />} />
           <Route path="/register" element={<Register />} />
           <Route path="/profile" element={<Profile />} />
+          <Route path="/faction" element={<Faction />} />
         </Routes>
       </main>
     </div>

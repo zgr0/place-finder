@@ -202,6 +202,82 @@ app.post('/reviews', async (req: Request, res: Response) => {
   }
 });
 
+app.get('/factions/ranking', async (req: Request, res: Response) => {
+  try {
+    const factions = await prisma.faction.findMany({
+      include: { users: { select: { totalPoints: true } } },
+    });
+    const ranking = factions
+      .map(f => ({
+        id: f.id,
+        name: f.name,
+        color: f.color,
+        memberCount: f.users.length,
+        totalPoints: f.users.reduce((sum, u) => sum + u.totalPoints, 0),
+      }))
+      .sort((a, b) => b.totalPoints - a.totalPoints);
+    return res.json(ranking);
+  } catch (error) {
+    return res.status(500).json({ error: 'Failed to fetch faction ranking' });
+  }
+});
+
+app.get('/factions/:factionId/members', async (req: Request, res: Response) => {
+  const factionId = parseInt(req.params.factionId, 10);
+  if (isNaN(factionId)) return res.status(400).json({ error: 'Invalid factionId' });
+
+  try {
+    const members = await prisma.user.findMany({
+      where: { factionId },
+      select: { id: true, username: true, profilePicture: true, level: true, totalPoints: true },
+      orderBy: { totalPoints: 'desc' },
+    });
+    return res.json(members);
+  } catch (error) {
+    return res.status(500).json({ error: 'Failed to fetch members' });
+  }
+});
+
+app.get('/factions/:factionId/messages', async (req: Request, res: Response) => {
+  const factionId = parseInt(req.params.factionId, 10);
+  if (isNaN(factionId)) return res.status(400).json({ error: 'Invalid factionId' });
+
+  try {
+    const messages = await prisma.message.findMany({
+      where: { factionId },
+      include: { user: { select: { username: true, profilePicture: true } } },
+      orderBy: { createdAt: 'asc' },
+      take: 50,
+    });
+    return res.json(messages);
+  } catch (error) {
+    return res.status(500).json({ error: 'Failed to fetch messages' });
+  }
+});
+
+app.post('/factions/:factionId/messages', async (req: Request, res: Response) => {
+  const factionId = parseInt(req.params.factionId, 10);
+  if (isNaN(factionId)) return res.status(400).json({ error: 'Invalid factionId' });
+
+  const { userId, content, type } = req.body;
+  if (!userId || !content) return res.status(400).json({ error: 'userId and content are required' });
+
+  try {
+    const user = await prisma.user.findUnique({ where: { id: userId } });
+    if (!user || user.factionId !== factionId) {
+      return res.status(403).json({ error: 'User does not belong to this faction' });
+    }
+
+    const message = await prisma.message.create({
+      data: { userId, factionId, content, type: type || 'text' },
+      include: { user: { select: { username: true, profilePicture: true } } },
+    });
+    return res.status(201).json(message);
+  } catch (error) {
+    return res.status(500).json({ error: 'Failed to send message' });
+  }
+});
+
 app.get('/users/:userId/profile', async (req: Request, res: Response) => {
   const userId = parseInt(req.params.userId, 10);
   if (isNaN(userId)) return res.status(400).json({ error: 'Invalid userId' });

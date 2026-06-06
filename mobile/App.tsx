@@ -15,6 +15,7 @@ import {
   Image,
   ActivityIndicator,
 } from 'react-native';
+import * as Location from 'expo-location';
 import MapView, { Circle, Marker } from 'react-native-maps';
 import Svg, { Polygon, G } from 'react-native-svg';
 
@@ -79,6 +80,205 @@ const FACTIONS = [
 // Android Emulator: http://10.0.2.2:3000
 // Real Device: http://<your-ip>:3000
 const API_BASE_URL = 'http://10.0.2.2:3000';
+
+const REVIEW_RADIUS = 300; // metres
+
+function haversineDistance(lat1: number, lon1: number, lat2: number, lon2: number): number {
+  const R = 6_371_000;
+  const toR = (d: number) => d * Math.PI / 180;
+  const dLat = toR(lat2 - lat1);
+  const dLon = toR(lon2 - lon1);
+  const a = Math.sin(dLat / 2) ** 2
+    + Math.cos(toR(lat1)) * Math.cos(toR(lat2)) * Math.sin(dLon / 2) ** 2;
+  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+}
+
+function fmtDist(m: number) {
+  return m < 1000 ? `${Math.round(m)} m` : `${(m / 1000).toFixed(1)} km`;
+}
+
+// ─── VenueReviewSheet ─────────────────────────────────────────────────────────
+
+interface SelectedVenue { name: string; lat: number; lon: number; amenity: string }
+interface UserLocation  { lat: number; lon: number }
+
+const VenueReviewSheet = ({
+  venue, userLocation, authUser, onClose, onSubmitted,
+}: {
+  venue: SelectedVenue;
+  userLocation: UserLocation | null;
+  authUser: AuthUser | null;
+  onClose: () => void;
+  onSubmitted: () => void;
+}) => {
+  const [rating,     setRating]     = useState(5);
+  const [content,    setContent]    = useState('');
+  const [submitting, setSubmitting] = useState(false);
+  const [submitted,  setSubmitted]  = useState(false);
+
+  const distance = userLocation
+    ? haversineDistance(userLocation.lat, userLocation.lon, venue.lat, venue.lon)
+    : null;
+  const isNearby = distance !== null && distance <= REVIEW_RADIUS;
+  const canReview = isNearby && !!authUser && !submitted;
+
+  const handleSubmit = async () => {
+    if (!canReview || submitting) return;
+    setSubmitting(true);
+    try {
+      const res = await fetch(`${API_BASE_URL}/reviews`, {
+        method:  'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          userId: authUser!.id,
+          venueName: venue.name,
+          rating,
+          content: content.trim() || undefined,
+        }),
+      });
+      if (res.ok) { setSubmitted(true); setTimeout(onSubmitted, 1400); }
+    } finally { setSubmitting(false); }
+  };
+
+  return (
+    <View style={sheetStyles.sheet}>
+      <View style={sheetStyles.handle} />
+
+      {/* Header */}
+      <View style={sheetStyles.header}>
+        <View style={{ flex: 1 }}>
+          <Text style={sheetStyles.venueName} numberOfLines={1}>{venue.name}</Text>
+          {venue.amenity ? <Text style={sheetStyles.venueAmenity}>{venue.amenity}</Text> : null}
+        </View>
+        <TouchableOpacity onPress={onClose} style={sheetStyles.closeBtn} activeOpacity={0.7}>
+          <Text style={{ color: C.textMuted, fontSize: 20, lineHeight: 22 }}>×</Text>
+        </TouchableOpacity>
+      </View>
+
+      {/* Distance pill */}
+      <View style={[sheetStyles.distancePill, { borderColor: isNearby ? '#10b981' : distance === null ? C.border : '#f87171' }]}>
+        <Text style={{ fontSize: 13 }}>{isNearby ? '✅' : distance === null ? '📡' : '📍'}</Text>
+        <Text style={[sheetStyles.distanceText, { color: isNearby ? '#10b981' : distance === null ? C.textMuted : '#f87171' }]}>
+          {distance === null
+            ? 'Locating you…'
+            : isNearby
+              ? `${fmtDist(distance)} away — close enough to review`
+              : `${fmtDist(distance)} away — must be within ${REVIEW_RADIUS} m`}
+        </Text>
+      </View>
+
+      {/* Body */}
+      {!authUser ? (
+        <Text style={sheetStyles.prompt}>Log in to write a review.</Text>
+      ) : submitted ? (
+        <Text style={sheetStyles.success}>✓ Review submitted!</Text>
+      ) : (
+        <>
+          {/* Stars */}
+          <View style={sheetStyles.stars}>
+            {[1, 2, 3, 4, 5].map(s => (
+              <TouchableOpacity key={s} onPress={() => isNearby && setRating(s)} activeOpacity={0.7}>
+                <Text style={[sheetStyles.star, {
+                  color:   s <= rating ? C.primary : C.textMuted,
+                  opacity: isNearby ? 1 : 0.3,
+                }]}>
+                  {s <= rating ? '★' : '☆'}
+                </Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+          {/* Comment */}
+          <TextInput
+            style={[sheetStyles.commentInput, !isNearby && { opacity: 0.3 }]}
+            placeholder="Share your experience (optional)"
+            placeholderTextColor={C.textMuted}
+            value={content}
+            onChangeText={setContent}
+            multiline
+            editable={isNearby}
+          />
+          {/* Submit */}
+          <TouchableOpacity
+            style={[sheetStyles.submitBtn, !canReview && { opacity: 0.35 }]}
+            onPress={handleSubmit}
+            disabled={!canReview || submitting}
+            activeOpacity={0.85}
+          >
+            {submitting
+              ? <ActivityIndicator color={C.bg} size="small" />
+              : <Text style={sheetStyles.submitBtnText}>SUBMIT REVIEW</Text>}
+          </TouchableOpacity>
+        </>
+      )}
+    </View>
+  );
+};
+
+const sheetStyles = StyleSheet.create({
+  sheet: {
+    position:            'absolute',
+    bottom:              0,
+    left:                0,
+    right:               0,
+    backgroundColor:     C.card,
+    borderTopLeftRadius: 16,
+    borderTopRightRadius: 16,
+    borderTopWidth:      2,
+    borderTopColor:      C.primary,
+    padding:             16,
+    paddingBottom:       Platform.OS === 'ios' ? 36 : 20,
+    shadowColor:         '#000',
+    shadowOffset:        { width: 0, height: -6 },
+    shadowOpacity:       0.45,
+    shadowRadius:        14,
+    elevation:           12,
+  },
+  handle: {
+    width: 36, height: 4, borderRadius: 2,
+    backgroundColor: C.border,
+    alignSelf: 'center', marginBottom: 14,
+  },
+  header: {
+    flexDirection: 'row', alignItems: 'flex-start',
+    marginBottom: 12, gap: 10,
+  },
+  venueName: {
+    fontSize: 16, fontWeight: '700', color: C.textMain, marginBottom: 2,
+  },
+  venueAmenity: {
+    fontSize: 11, color: C.textMuted, textTransform: 'uppercase', letterSpacing: 1,
+  },
+  closeBtn: {
+    width: 28, height: 28, borderRadius: 4,
+    borderWidth: 1, borderColor: C.border,
+    alignItems: 'center', justifyContent: 'center',
+  },
+  distancePill: {
+    flexDirection: 'row', alignItems: 'center', gap: 8,
+    borderWidth: 1, borderRadius: 6,
+    paddingHorizontal: 12, paddingVertical: 8,
+    marginBottom: 14, backgroundColor: 'rgba(0,0,0,0.2)',
+  },
+  distanceText: { fontSize: 13, flex: 1, lineHeight: 18 },
+  prompt:  { color: C.textMuted, fontSize: 14, textAlign: 'center', paddingVertical: 12 },
+  success: { color: '#10b981',   fontSize: 15, textAlign: 'center', paddingVertical: 12, fontWeight: '700' },
+  stars: { flexDirection: 'row', justifyContent: 'center', gap: 6, marginBottom: 14 },
+  star:  { fontSize: 32 },
+  commentInput: {
+    backgroundColor: 'rgba(0,0,0,0.25)',
+    borderWidth: 1, borderColor: C.border, borderRadius: 4,
+    paddingHorizontal: 12, paddingVertical: 10,
+    color: C.textMain, fontSize: 14, minHeight: 72,
+    marginBottom: 12, textAlignVertical: 'top',
+  },
+  submitBtn: {
+    backgroundColor: C.primary, borderRadius: 4,
+    paddingVertical: 16, alignItems: 'center',
+  },
+  submitBtnText: {
+    color: C.bg, fontWeight: '700', fontSize: 14, letterSpacing: 2,
+  },
+});
 
 // ─── HexGrid ──────────────────────────────────────────────────────────────────
 
@@ -311,6 +511,371 @@ const AuthScreen = ({
   );
 };
 
+// ─── FactionScreen ────────────────────────────────────────────────────────────
+
+interface ChatMessage {
+  id: number;
+  userId: number;
+  content: string;
+  type: string;
+  createdAt: string;
+  user: { username: string; profilePicture: string | null };
+}
+
+interface FactionMember {
+  id: number;
+  username: string;
+  profilePicture: string | null;
+  level: number;
+}
+
+const FactionScreen = ({ user }: { user: AuthUser }) => {
+  const [messages,  setMessages]  = useState<ChatMessage[]>([]);
+  const [members,   setMembers]   = useState<FactionMember[]>([]);
+  const [text,      setText]      = useState('');
+  const [sending,   setSending]   = useState(false);
+  const [showPicker, setShowPicker] = useState(false);
+  const [venues,    setVenues]    = useState<string[]>([]);
+  const [venueSearch, setVenueSearch] = useState('');
+  const scrollRef = React.useRef<ScrollView>(null);
+
+  const faction = FACTIONS.find(f => f.id === user.factionId);
+
+  useEffect(() => {
+    fetchMessages();
+    fetchMembers();
+    fetchVenues();
+    const interval = setInterval(fetchMessages, 3000);
+    return () => clearInterval(interval);
+  }, []);
+
+  const fetchMessages = async () => {
+    try {
+      const res = await fetch(`${API_BASE_URL}/factions/${user.factionId}/messages`);
+      if (res.ok) setMessages(await res.json());
+    } catch { /* silent */ }
+  };
+
+  const fetchMembers = async () => {
+    try {
+      const res = await fetch(`${API_BASE_URL}/factions/${user.factionId}/members`);
+      if (res.ok) setMembers(await res.json());
+    } catch { /* silent */ }
+  };
+
+  const fetchVenues = async () => {
+    try {
+      const res = await fetch(`${API_BASE_URL}/venues`);
+      if (!res.ok) return;
+      const data = await res.json();
+      const names: string[] = (data.features || [])
+        .map((f: any) => f.properties?.name)
+        .filter(Boolean);
+      setVenues([...new Set(names)] as string[]);
+    } catch { /* silent */ }
+  };
+
+  const sendMessage = async (content: string, type = 'text') => {
+    if (!content.trim() || sending) return;
+    setSending(true);
+    try {
+      await fetch(`${API_BASE_URL}/factions/${user.factionId}/messages`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId: user.id, content: content.trim(), type }),
+      });
+      await fetchMessages();
+      setTimeout(() => scrollRef.current?.scrollToEnd({ animated: true }), 100);
+    } finally {
+      setSending(false);
+    }
+  };
+
+  const filteredVenues = venues.filter(v =>
+    v.toLowerCase().includes(venueSearch.toLowerCase())
+  ).slice(0, 25);
+
+  return (
+    <View style={{ flex: 1, backgroundColor: C.bg }}>
+      {/* Header */}
+      <View style={[factionStyles.header, { borderTopColor: faction?.color ?? C.primary }]}>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+          <View style={{ width: 8, height: 8, borderRadius: 2, backgroundColor: faction?.color ?? C.primary }} />
+          <Text style={factionStyles.headerName}>{faction?.name ?? 'Faction'}</Text>
+          <View style={factionStyles.memberBadge}>
+            <Text style={factionStyles.memberBadgeText}>{members.length} members</Text>
+          </View>
+        </View>
+      </View>
+
+      {/* Members row */}
+      {members.length > 0 && (
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} style={factionStyles.membersRow} contentContainerStyle={{ padding: 10, gap: 8 }}>
+          {members.map(m => (
+            <View key={m.id} style={factionStyles.memberChip}>
+              <View style={[factionStyles.memberAvatar, { borderColor: faction?.color ?? C.primary }]}>
+                {m.profilePicture
+                  ? <Image source={{ uri: m.profilePicture }} style={{ width: '100%', height: '100%' }} />
+                  : <Text style={factionStyles.memberInitial}>{m.username.charAt(0).toUpperCase()}</Text>
+                }
+              </View>
+              <Text style={factionStyles.memberName} numberOfLines={1}>{m.username}</Text>
+            </View>
+          ))}
+        </ScrollView>
+      )}
+
+      {/* Messages */}
+      <ScrollView ref={scrollRef} style={{ flex: 1 }} contentContainerStyle={factionStyles.messagesList} onContentSizeChange={() => scrollRef.current?.scrollToEnd({ animated: false })}>
+        {messages.length === 0 && (
+          <View style={styles.emptyState}>
+            <Text style={styles.emptyEmoji}>⚔️</Text>
+            <Text style={styles.emptyText}>No messages yet. Start the conversation!</Text>
+          </View>
+        )}
+        {messages.map(msg => {
+          const isOwn = msg.userId === user.id;
+          return (
+            <View key={msg.id} style={factionStyles.msgRow}>
+              <View style={factionStyles.msgAvatar}>
+                {msg.user.profilePicture
+                  ? <Image source={{ uri: msg.user.profilePicture }} style={{ width: 30, height: 30, borderRadius: 4 }} />
+                  : <Text style={factionStyles.msgAvatarText}>{msg.user.username.charAt(0).toUpperCase()}</Text>
+                }
+              </View>
+              <View style={{ flex: 1 }}>
+                <View style={factionStyles.msgMeta}>
+                  <Text style={[factionStyles.msgAuthor, isOwn && { color: faction?.color ?? C.primary }]}>{msg.user.username}</Text>
+                  <Text style={factionStyles.msgTime}>
+                    {new Date(msg.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                  </Text>
+                </View>
+                {msg.type === 'venue' ? (
+                  <View style={factionStyles.venueCard}>
+                    <Text style={{ fontSize: 14 }}>📍</Text>
+                    <View style={{ flex: 1 }}>
+                      <Text style={factionStyles.venueCardLabel}>Shared place</Text>
+                      <Text style={factionStyles.venueCardName} numberOfLines={1}>{msg.content}</Text>
+                    </View>
+                  </View>
+                ) : (
+                  <Text style={factionStyles.msgText}>{msg.content}</Text>
+                )}
+              </View>
+            </View>
+          );
+        })}
+      </ScrollView>
+
+      {/* Venue picker */}
+      {showPicker && (
+        <View style={factionStyles.venuePicker}>
+          <View style={factionStyles.venuePickerHeader}>
+            <Text style={factionStyles.venuePickerTitle}>Share a place</Text>
+            <TouchableOpacity onPress={() => { setShowPicker(false); setVenueSearch(''); }}>
+              <Text style={{ color: C.textMuted, fontSize: 18 }}>×</Text>
+            </TouchableOpacity>
+          </View>
+          <TextInput
+            style={[styles.input, { marginBottom: 8 }]}
+            placeholder="Search venues…"
+            placeholderTextColor={C.textMuted}
+            value={venueSearch}
+            onChangeText={setVenueSearch}
+          />
+          <ScrollView style={{ maxHeight: 200 }}>
+            {filteredVenues.map(v => (
+              <TouchableOpacity
+                key={v}
+                style={factionStyles.venueItem}
+                onPress={() => { setShowPicker(false); setVenueSearch(''); sendMessage(v, 'venue'); }}
+              >
+                <Text style={{ fontSize: 13 }}>📍</Text>
+                <Text style={factionStyles.venueItemText} numberOfLines={1}>{v}</Text>
+              </TouchableOpacity>
+            ))}
+          </ScrollView>
+        </View>
+      )}
+
+      {/* Input bar */}
+      <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
+        <View style={factionStyles.inputBar}>
+          <TouchableOpacity style={factionStyles.shareBtn} onPress={() => setShowPicker(v => !v)}>
+            <Text style={{ fontSize: 16 }}>📍</Text>
+          </TouchableOpacity>
+          <TextInput
+            style={factionStyles.textInput}
+            placeholder="Message your faction…"
+            placeholderTextColor={C.textMuted}
+            value={text}
+            onChangeText={setText}
+            multiline
+          />
+          <TouchableOpacity
+            style={[factionStyles.sendBtn, { borderColor: faction?.color ?? C.primary }, (!text.trim() || sending) && { opacity: 0.35 }]}
+            onPress={() => { sendMessage(text); setText(''); }}
+            disabled={!text.trim() || sending}
+          >
+            <Text style={[factionStyles.sendBtnText, { color: faction?.color ?? C.primary }]}>▶</Text>
+          </TouchableOpacity>
+        </View>
+      </KeyboardAvoidingView>
+    </View>
+  );
+};
+
+const factionStyles = StyleSheet.create({
+  header: {
+    flexDirection:    'row',
+    alignItems:       'center',
+    justifyContent:   'space-between',
+    paddingHorizontal: 16,
+    paddingVertical:  14,
+    backgroundColor:  C.card,
+    borderBottomWidth: 1,
+    borderBottomColor: C.border,
+    borderTopWidth:   2,
+  },
+  headerName: {
+    fontWeight:    '800',
+    fontSize:      15,
+    color:         C.textMain,
+    letterSpacing: 1.5,
+    textTransform: 'uppercase',
+  },
+  memberBadge: {
+    backgroundColor: 'rgba(0,0,0,0.3)',
+    borderWidth:     1,
+    borderColor:     C.border,
+    borderRadius:    99,
+    paddingHorizontal: 8,
+    paddingVertical:   3,
+  },
+  memberBadgeText: {
+    fontSize:   10,
+    color:      C.textMuted,
+    letterSpacing: 0.5,
+  },
+  membersRow: {
+    backgroundColor: C.card,
+    borderBottomWidth: 1,
+    borderBottomColor: C.border,
+    flexShrink:      0,
+    maxHeight:       80,
+  },
+  memberChip: {
+    alignItems:  'center',
+    gap:         4,
+    width:       52,
+  },
+  memberAvatar: {
+    width:          36,
+    height:         36,
+    borderRadius:   4,
+    borderWidth:    1,
+    backgroundColor: C.bg,
+    alignItems:     'center',
+    justifyContent: 'center',
+    overflow:       'hidden',
+  },
+  memberInitial: { fontSize: 16, fontWeight: '700', color: C.primary },
+  memberName:    { fontSize: 9, color: C.textMuted, textAlign: 'center' },
+  messagesList:  { padding: 12, gap: 12 },
+  msgRow:        { flexDirection: 'row', gap: 8, alignItems: 'flex-start' },
+  msgAvatar: {
+    width:          30,
+    height:         30,
+    borderRadius:   4,
+    backgroundColor: C.card,
+    alignItems:     'center',
+    justifyContent: 'center',
+    flexShrink:     0,
+    overflow:       'hidden',
+  },
+  msgAvatarText: { fontSize: 13, fontWeight: '700', color: C.primary },
+  msgMeta:       { flexDirection: 'row', alignItems: 'baseline', gap: 6, marginBottom: 4 },
+  msgAuthor:     { fontSize: 13, fontWeight: '600', color: C.textMain },
+  msgTime:       { fontSize: 10, color: C.textMuted },
+  msgText:       { fontSize: 14, color: C.textMain, lineHeight: 20, opacity: 0.9 },
+  venueCard: {
+    flexDirection:   'row',
+    alignItems:      'center',
+    gap:             8,
+    backgroundColor: 'rgba(0,0,0,0.25)',
+    borderWidth:     1,
+    borderColor:     C.border,
+    borderLeftWidth: 2,
+    borderLeftColor: C.primary,
+    borderRadius:    4,
+    padding:         10,
+    maxWidth:        240,
+  },
+  venueCardLabel: { fontSize: 10, color: C.textMuted, textTransform: 'uppercase', letterSpacing: 0.8 },
+  venueCardName:  { fontSize: 13, fontWeight: '600', color: C.textMain },
+  venuePicker: {
+    backgroundColor: C.card,
+    borderTopWidth:  2,
+    borderTopColor:  C.primary,
+    borderColor:     C.border,
+    borderWidth:     1,
+    borderRadius:    6,
+    padding:         14,
+    margin:          10,
+  },
+  venuePickerHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 },
+  venuePickerTitle:  { fontSize: 13, fontWeight: '700', color: C.textMain, letterSpacing: 0.5 },
+  venueItem: {
+    flexDirection: 'row',
+    alignItems:    'center',
+    gap:           8,
+    paddingVertical: 10,
+    borderBottomWidth: 1,
+    borderBottomColor: C.border,
+  },
+  venueItemText: { fontSize: 13, color: C.textMain, flex: 1 },
+  inputBar: {
+    flexDirection:    'row',
+    alignItems:       'flex-end',
+    gap:              8,
+    padding:          10,
+    paddingBottom:    Platform.OS === 'ios' ? 20 : 10,
+    backgroundColor:  C.card,
+    borderTopWidth:   1,
+    borderTopColor:   C.border,
+  },
+  shareBtn: {
+    width:          40,
+    height:         40,
+    borderRadius:   4,
+    borderWidth:    1,
+    borderColor:    C.border,
+    alignItems:     'center',
+    justifyContent: 'center',
+  },
+  textInput: {
+    flex:              1,
+    backgroundColor:   'rgba(0,0,0,0.25)',
+    borderWidth:       1,
+    borderColor:       C.border,
+    borderRadius:      4,
+    paddingVertical:   10,
+    paddingHorizontal: 12,
+    color:             C.textMain,
+    fontSize:          14,
+    maxHeight:         90,
+  },
+  sendBtn: {
+    width:          40,
+    height:         40,
+    borderRadius:   4,
+    borderWidth:    1,
+    alignItems:     'center',
+    justifyContent: 'center',
+  },
+  sendBtnText: { fontSize: 14, fontWeight: '700' },
+});
+
 // ─── ProfileScreen ────────────────────────────────────────────────────────────
 
 const ProfileScreen = ({ user, onLogout }: { user: AuthUser; onLogout: () => void }) => {
@@ -453,10 +1018,28 @@ const ProfileScreen = ({ user, onLogout }: { user: AuthUser; onLogout: () => voi
 // ─── Root App ─────────────────────────────────────────────────────────────────
 
 export default function App() {
-  const [activeTab, setActiveTab] = useState('map');
-  const [authMode,  setAuthMode]  = useState<AuthMode>('login');
-  const [venues,    setVenues]    = useState<any[]>([]);
-  const [authUser,  setAuthUser]  = useState<AuthUser | null>(null);
+  const [activeTab,     setActiveTab]     = useState('map');
+  const [authMode,      setAuthMode]      = useState<AuthMode>('login');
+  const [venues,        setVenues]        = useState<any[]>([]);
+  const [authUser,      setAuthUser]      = useState<AuthUser | null>(null);
+  const [userLocation,  setUserLocation]  = useState<UserLocation | null>(null);
+  const [selectedVenue, setSelectedVenue] = useState<SelectedVenue | null>(null);
+
+  // Request location permission and watch position
+  useEffect(() => {
+    let sub: Location.LocationSubscription | null = null;
+    (async () => {
+      const { status } = await Location.requestForegroundPermissionsAsync();
+      if (status !== 'granted') return;
+      const pos = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
+      setUserLocation({ lat: pos.coords.latitude, lon: pos.coords.longitude });
+      sub = await Location.watchPositionAsync(
+        { accuracy: Location.Accuracy.Balanced, timeInterval: 5000, distanceInterval: 10 },
+        loc => setUserLocation({ lat: loc.coords.latitude, lon: loc.coords.longitude }),
+      );
+    })();
+    return () => { sub?.remove(); };
+  }, []);
 
   useEffect(() => {
     if (activeTab === 'map') fetchVenues();
@@ -485,6 +1068,7 @@ export default function App() {
               initialRegion={{ latitude: 40.9882, longitude: 29.0267, latitudeDelta: 0.01, longitudeDelta: 0.01 }}
               userInterfaceStyle="dark"
               customMapStyle={darkMapStyle}
+              onPress={() => setSelectedVenue(null)}
             >
               <Circle
                 center={{ latitude: 40.9882, longitude: 29.0267 }}
@@ -493,6 +1077,26 @@ export default function App() {
                 strokeColor="rgba(232, 160, 0, 0.35)"
                 strokeWidth={1}
               />
+              {/* User location dot */}
+              {userLocation && (
+                <Circle
+                  center={{ latitude: userLocation.lat, longitude: userLocation.lon }}
+                  radius={8}
+                  fillColor={C.primary}
+                  strokeColor="#fff"
+                  strokeWidth={2}
+                />
+              )}
+              {/* User proximity ring */}
+              {userLocation && (
+                <Circle
+                  center={{ latitude: userLocation.lat, longitude: userLocation.lon }}
+                  radius={REVIEW_RADIUS}
+                  fillColor="rgba(232,160,0,0.06)"
+                  strokeColor="rgba(232,160,0,0.3)"
+                  strokeWidth={1}
+                />
+              )}
               {venues.map((venue: any) => (
                 <Marker
                   key={venue.id || venue.properties['@id']}
@@ -500,19 +1104,41 @@ export default function App() {
                     latitude:  venue.geometry.coordinates[1],
                     longitude: venue.geometry.coordinates[0],
                   }}
-                  title={venue.properties.name || 'Venue'}
-                  description={venue.properties.amenity}
                   pinColor="#ff451b"
+                  onPress={() => setSelectedVenue({
+                    name:     venue.properties.name || 'Venue',
+                    amenity:  venue.properties.amenity || '',
+                    lat:      venue.geometry.coordinates[1],
+                    lon:      venue.geometry.coordinates[0],
+                  })}
                 />
               ))}
             </MapView>
+
             <View style={styles.mapOverlay}>
               <Text style={styles.overlayText}>Kadıköy District</Text>
             </View>
+
+            {/* Review sheet */}
+            {selectedVenue && (
+              <VenueReviewSheet
+                venue={selectedVenue}
+                userLocation={userLocation}
+                authUser={authUser}
+                onClose={() => setSelectedVenue(null)}
+                onSubmitted={() => setSelectedVenue(null)}
+              />
+            )}
           </View>
         )}
 
         {activeTab === 'hex' && <HexGrid />}
+
+        {activeTab === 'faction' && (
+          authUser
+            ? <FactionScreen user={authUser} />
+            : <AuthScreen mode={authMode} setMode={setAuthMode} onLoginSuccess={setAuthUser} />
+        )}
 
         {activeTab === 'profile' && (
           authUser
@@ -526,6 +1152,7 @@ export default function App() {
         {[
           { key: 'map',     icon: '📍', label: 'Map'     },
           { key: 'hex',     icon: '⬡',  label: 'Hex'     },
+          { key: 'faction', icon: '⚔️', label: 'Faction' },
           { key: 'profile', icon: '👤', label: 'Profile' },
         ].map(tab => (
           <TouchableOpacity

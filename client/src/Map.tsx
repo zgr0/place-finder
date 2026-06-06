@@ -10,12 +10,29 @@ declare global {
   }
 }
 
+interface FactionRank {
+  id: number;
+  name: string;
+  color: string;
+  memberCount: number;
+  totalPoints: number;
+}
+
 export default function Map() {
   const mapContainer = useRef<HTMLDivElement | null>(null);
   const map = useRef<maplibregl.Map | null>(null);
   const [mapError, setMapError] = useState<string | null>(null);
   const [isLoadingMap, setIsLoadingMap] = useState(true);
   const [selectedVenueForReview, setSelectedVenueForReview] = useState<string | null>(null);
+  const [factionRanking, setFactionRanking] = useState<FactionRank[]>([]);
+  const [showRanking, setShowRanking] = useState(false);
+
+  useEffect(() => {
+    fetch('http://localhost:3000/factions/ranking')
+      .then(r => r.ok ? r.json() : [])
+      .then(setFactionRanking)
+      .catch(() => {});
+  }, []);
   const lng = 29.0267;
   const lat = 40.9882;
   const zoom = 14;
@@ -222,11 +239,39 @@ export default function Map() {
           </div>
         )}
         <div ref={mapContainer} className="map" />
+
+        {/* Faction ranking widget */}
+        <div className="map-ranking-widget">
+          <button
+            className="map-ranking-toggle"
+            onClick={() => setShowRanking(v => !v)}
+            title="Faction Rankings"
+          >
+            🏆 {showRanking ? '▲' : '▼'}
+          </button>
+          {showRanking && (
+            <div className="map-ranking-panel">
+              <div className="map-ranking-title">Faction Rankings</div>
+              {factionRanking.length === 0 ? (
+                <div style={{ color: 'var(--text-muted)', fontSize: '0.78rem', padding: '0.5rem 0' }}>No data yet</div>
+              ) : (
+                factionRanking.map((f, i) => (
+                  <div key={f.id} className="map-ranking-row">
+                    <span className="map-ranking-pos">#{i + 1}</span>
+                    <span className="map-ranking-dot" style={{ background: f.color }} />
+                    <span className="map-ranking-name">{f.name}</span>
+                    <span className="map-ranking-pts">{f.totalPoints.toLocaleString()} pts</span>
+                  </div>
+                ))
+              )}
+            </div>
+          )}
+        </div>
       </div>
       {selectedVenueForReview && (
-        <ReviewModal 
-          venueName={selectedVenueForReview} 
-          onClose={() => setSelectedVenueForReview(null)} 
+        <ReviewModal
+          venueName={selectedVenueForReview}
+          onClose={() => setSelectedVenueForReview(null)}
         />
       )}
     </>

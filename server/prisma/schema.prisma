@@ -9,11 +9,23 @@ datasource db {
 }
 
 model Faction {
-  id          Int      @id @default(autoincrement())
-  name        String   @unique // örn. "Mavi "
-  color       String   // örn. "#0000FF"
+  id          Int       @id @default(autoincrement())
+  name        String    @unique
+  color       String
   users       User[]
-  hexesOwned  Int      @default(0)
+  messages    Message[]
+  hexesOwned  Int       @default(0)
+}
+
+model Message {
+  id        Int      @id @default(autoincrement())
+  user      User     @relation(fields: [userId], references: [id])
+  userId    Int
+  faction   Faction  @relation(fields: [factionId], references: [id])
+  factionId Int
+  content   String
+  type      String   @default("text")
+  createdAt DateTime @default(now())
 }
 
 model User {
@@ -27,6 +39,7 @@ model User {
   level          Int       @default(1)
   profilePicture String?
   reviews        Review[]
+  messages       Message[]
   createdAt      DateTime  @default(now())
 }
 
