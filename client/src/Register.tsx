@@ -1,10 +1,27 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
+
+const API_BASE = 'http://localhost:3000';
+
+interface FactionOption {
+  id: number;
+  name: string;
+  color: string;
+  memberCount: number;
+}
 
 const Register = () => {
-  const [form, setForm] = useState({ email: '', username: '', password: '', factionId: 1 });
+  const [form, setForm] = useState({ email: '', username: '', password: '', factionId: 0 });
+  const [factions, setFactions] = useState<FactionOption[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
+
+  useEffect(() => {
+    fetch(`${API_BASE}/factions`)
+      .then(r => r.ok ? r.json() : [])
+      .then(setFactions)
+      .catch(() => {});
+  }, []);
 
   const handleRegister = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -13,17 +30,22 @@ const Register = () => {
     setIsLoading(true);
 
     try {
-      const res = await fetch('http://localhost:3000/auth/register', {
+      const body: Record<string, unknown> = {
+        email: form.email,
+        username: form.username,
+        password: form.password,
+      };
+      if (form.factionId > 0) body.factionId = form.factionId;
+
+      const res = await fetch(`${API_BASE}/auth/register`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(form),
+        body: JSON.stringify(body),
       });
 
       if (res.ok) {
-        setSuccess('Registration successful! Redirecting to login');
-        setTimeout(() => {
-          window.location.href = '/login';
-        }, 1000);
+        setSuccess('Registration successful! Redirecting to login…');
+        setTimeout(() => { window.location.href = '/login'; }, 1000);
         return;
       }
 
@@ -33,7 +55,7 @@ const Register = () => {
           ? `${data?.error || 'Registration failed.'} ${data.details}`
           : data?.error || 'Registration failed. Please try again.'
       );
-    } catch (err) {
+    } catch {
       setError('Unable to connect to the server. Please make sure the backend is running.');
     } finally {
       setIsLoading(false);
@@ -66,22 +88,29 @@ const Register = () => {
             onChange={e => setForm({ ...form, password: e.target.value })}
           />
 
-          <label className="text-sm text-slate-400">Select your faction</label>
-          <select
-            className="form-field"
-            value={form.factionId}
-            onChange={e => setForm({ ...form, factionId: Number(e.target.value) })}
-          >
-            <option value="1">Red Reapers (Attack)</option>
-            <option value="2">Blue Sentinels (Defense)</option>
-            <option value="3">Green Guardians (Exploration)</option>
-          </select>
+          <div>
+            <label className="text-sm text-slate-400" style={{ display: 'block', marginBottom: '0.4rem' }}>
+              Faction (optional — you can join later)
+            </label>
+            <select
+              className="form-field"
+              value={form.factionId}
+              onChange={e => setForm({ ...form, factionId: Number(e.target.value) })}
+            >
+              <option value={0}>No faction (join later)</option>
+              {factions.map(f => (
+                <option key={f.id} value={f.id}>
+                  {f.name} ({f.memberCount} member{f.memberCount !== 1 ? 's' : ''})
+                </option>
+              ))}
+            </select>
+          </div>
 
           {success && <div className="status-text status-success">{success}</div>}
           {error && <div className="status-text status-error">{error}</div>}
 
           <button className="button-primary" disabled={isLoading}>
-            {isLoading ? <span className="loader" style={{width: '18px', height: '18px', borderWidth: '2px'}}></span> : null}
+            {isLoading ? <span className="loader" style={{ width: '18px', height: '18px', borderWidth: '2px' }} /> : null}
             {isLoading ? 'Registering...' : 'Initialize Account'}
           </button>
         </form>

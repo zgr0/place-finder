@@ -1,0 +1,1 @@
+ALTER TABLE "Faction" ADD COLUMN "icon" TEXT NOT NULL DEFAULT '⚔️';

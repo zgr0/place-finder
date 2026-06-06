@@ -7,6 +7,8 @@ import Login from './Login'
 import Register from './Register'
 import Profile from './Profile'
 import Faction from './Faction'
+import FactionList from './FactionList'
+import CreateFaction from './CreateFaction'
 
 function App() {
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
@@ -68,12 +70,15 @@ function App() {
           <Link to="/hex" className="app-nav-link" onClick={() => setIsSidebarOpen(false)}>
             <span className="nav-icon">⬡</span> Hex Grid
           </Link>
+          <Link to="/factions" className="app-nav-link" onClick={() => setIsSidebarOpen(false)}>
+            <span className="nav-icon">🏰</span> Factions
+          </Link>
           {user && (
             <Link to="/profile" className="app-nav-link" onClick={() => setIsSidebarOpen(false)}>
               <span className="nav-icon">👤</span> Profile
             </Link>
           )}
-          {user && (
+          {user && user.factionId > 0 && (
             <Link to="/faction" className="app-nav-link" onClick={() => setIsSidebarOpen(false)}>
               <span className="nav-icon">⚔️</span> Faction Chat
             </Link>
@@ -133,6 +138,8 @@ function App() {
           <Route path="/register" element={<Register />} />
           <Route path="/profile" element={<Profile />} />
           <Route path="/faction" element={<Faction />} />
+          <Route path="/factions" element={<FactionList />} />
+          <Route path="/factions/create" element={<CreateFaction />} />
         </Routes>
       </main>
     </div>

@@ -3,11 +3,6 @@ import { Link } from 'react-router-dom'
 
 const API_BASE = 'http://localhost:3000';
 
-const FACTION_META: Record<number, { name: string; color: string }> = {
-  1: { name: 'Red Reapers',     color: '#ef4444' },
-  2: { name: 'Blue Sentinels',  color: '#3b82f6' },
-  3: { name: 'Green Guardians', color: '#10b981' },
-};
 
 interface ChatMessage {
   id: number;
@@ -61,10 +56,11 @@ export default function Faction() {
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef       = useRef<HTMLTextAreaElement>(null);
 
-  const userId    = parseInt(localStorage.getItem('userId') || '0');
-  const factionId = parseInt(localStorage.getItem('factionId') || '0');
-  const username  = localStorage.getItem('username') || '';
-  const faction   = FACTION_META[factionId];
+  const userId      = parseInt(localStorage.getItem('userId') || '0');
+  const factionId   = parseInt(localStorage.getItem('factionId') || '0');
+  const factionName  = localStorage.getItem('factionName') || 'Your Faction';
+  const factionColor = localStorage.getItem('factionColor') || 'var(--primary)';
+  const factionIcon  = localStorage.getItem('factionIcon') || '⚔️';
 
   // initial load
   useEffect(() => {
@@ -147,8 +143,7 @@ export default function Faction() {
     v.toLowerCase().includes(venueSearch.toLowerCase())
   );
 
-  // ── Not logged in ──
-  if (!userId || !factionId) {
+  if (!userId) {
     return (
       <div className="auth-page">
         <div className="auth-card" style={{ textAlign: 'center' }}>
@@ -166,14 +161,32 @@ export default function Faction() {
     );
   }
 
+  if (!factionId) {
+    return (
+      <div className="auth-page">
+        <div className="auth-card" style={{ textAlign: 'center' }}>
+          <div style={{ fontSize: '2.5rem', marginBottom: '1rem' }}>🏰</div>
+          <h2 className="auth-title">No Faction Yet</h2>
+          <p style={{ color: 'var(--text-muted)', marginBottom: '1.5rem', fontSize: '0.9rem' }}>
+            Join or create a faction to access faction chat.
+          </p>
+          <div style={{ display: 'flex', gap: '0.75rem', justifyContent: 'center' }}>
+            <Link to="/factions" className="button-primary" style={{ textDecoration: 'none', padding: '0.75rem 1.5rem' }}>Browse Factions</Link>
+            <Link to="/factions/create" className="button-primary" style={{ textDecoration: 'none', padding: '0.75rem 1.5rem', background: 'transparent', border: '1px solid var(--primary)', color: 'var(--primary)' }}>Create Faction</Link>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="faction-page">
 
       {/* Header */}
-      <div className="faction-header" style={{ borderTopColor: faction?.color }}>
+      <div className="faction-header" style={{ borderTopColor: factionColor }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-          <div style={{ width: 10, height: 10, borderRadius: 2, background: faction?.color, flexShrink: 0 }} />
-          <span className="faction-header-name">{faction?.name ?? 'Your Faction'}</span>
+          <div style={{ width: 26, height: 26, borderRadius: 6, background: factionColor, flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '0.9rem' }}>{factionIcon}</div>
+          <span className="faction-header-name">{factionName}</span>
           <span className="faction-header-badge">{members.length} members</span>
         </div>
         <div style={{ display: 'flex', gap: '0.4rem' }}>
@@ -236,7 +249,7 @@ export default function Faction() {
               <Avatar username={msg.user.username} picture={msg.user.profilePicture} size={30} />
               <div className="faction-msg-body">
                 <div className="faction-msg-meta">
-                  <span className="faction-msg-author" style={isOwn ? { color: faction?.color } : {}}>{msg.user.username}</span>
+                  <span className="faction-msg-author" style={isOwn ? { color: factionColor } : {}}>{msg.user.username}</span>
                   <span className="faction-msg-time">
                     {new Date(msg.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                   </span>
@@ -274,7 +287,7 @@ export default function Faction() {
           className="faction-send-btn"
           onClick={handleSend}
           disabled={!text.trim() || sending}
-          style={{ borderColor: faction?.color, color: faction?.color }}
+          style={{ borderColor: factionColor, color: factionColor }}
         >
           {sending ? '…' : '▶'}
         </button>

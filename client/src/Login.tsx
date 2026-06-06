@@ -25,7 +25,10 @@ const Login = () => {
         const data = await res.json();
         localStorage.setItem('userId', data.id);
         localStorage.setItem('username', data.username);
-        localStorage.setItem('factionId', data.factionId);
+        localStorage.setItem('factionId', data.factionId ?? '');
+        localStorage.setItem('factionName', data.factionName ?? '');
+        localStorage.setItem('factionColor', data.factionColor ?? '');
+        localStorage.setItem('factionIcon', data.factionIcon ?? '');
         window.dispatchEvent(new Event('auth-change'));
         setSuccess('Login successful! Redirecting');
         setTimeout(() => navigate('/'), 500);

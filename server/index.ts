@@ -34,11 +34,12 @@ app.get('/auth/register', (req: Request, res: Response) => {
 app.post('/auth/register', async (req: Request, res: Response) => {
   const { email: rawEmail, username, password, factionId } = req.body;
 
-  if (!rawEmail || !username || !password || typeof factionId !== 'number') {
-    return res.status(400).json({ error: 'email, username, password, and factionId are required' });
+  if (!rawEmail || !username || !password) {
+    return res.status(400).json({ error: 'email, username, and password are required' });
   }
 
   const email = rawEmail.toLowerCase().trim();
+  const parsedFactionId = typeof factionId === 'number' && factionId > 0 ? factionId : null;
 
   try {
     const hashedPassword = await bcrypt.hash(password, 10);
@@ -47,11 +48,20 @@ app.post('/auth/register', async (req: Request, res: Response) => {
         email,
         username,
         password: hashedPassword,
-        factionId,
+        ...(parsedFactionId ? { factionId: parsedFactionId } : {}),
       },
+      include: { faction: { select: { name: true, color: true, icon: true } } },
     });
 
-    return res.status(201).json({ id: user.id, email: user.email, username: user.username, factionId: user.factionId });
+    return res.status(201).json({
+      id: user.id,
+      email: user.email,
+      username: user.username,
+      factionId: user.factionId,
+      factionName: user.faction?.name ?? null,
+      factionColor: user.faction?.color ?? null,
+      factionIcon: user.faction?.icon ?? null,
+    });
   } catch (error) {
     return res.status(500).json({ error: 'Registration failed', details: error instanceof Error ? error.message : undefined });
   }
@@ -67,7 +77,10 @@ app.post('/auth/login', async (req: Request, res: Response) => {
   const email = rawEmail.toLowerCase().trim();
 
   try {
-    const user = await prisma.user.findUnique({ where: { email } });
+    const user = await prisma.user.findUnique({
+      where: { email },
+      include: { faction: { select: { name: true, color: true, icon: true } } },
+    });
     if (!user) {
       return res.status(401).json({ error: 'Invalid credentials' });
     }
@@ -77,7 +90,14 @@ app.post('/auth/login', async (req: Request, res: Response) => {
       return res.status(401).json({ error: 'Invalid credentials' });
     }
 
-    return res.status(200).json({ id: user.id, username: user.username, factionId: user.factionId });
+    return res.status(200).json({
+      id: user.id,
+      username: user.username,
+      factionId: user.factionId,
+      factionName: user.faction?.name ?? null,
+      factionColor: user.faction?.color ?? null,
+      factionIcon: user.faction?.icon ?? null,
+    });
   } catch (error) {
     return res.status(500).json({ error: 'Login failed', details: error instanceof Error ? error.message : undefined });
   }
@@ -112,6 +132,7 @@ app.post('/territory/ownership', async (req: Request, res: Response) => {
 
       for (const review of venue.reviews) {
         const factionId = review.user.factionId;
+        if (factionId === null) continue;
         hexScores[venue.h3Index][factionId] = (hexScores[venue.h3Index][factionId] || 0) + review.rating;
       }
     }
@@ -199,6 +220,74 @@ app.post('/reviews', async (req: Request, res: Response) => {
   } catch (error) {
     console.error('Error creating review:', error);
     return res.status(500).json({ error: 'Failed to create review' });
+  }
+});
+
+app.get('/factions', async (req: Request, res: Response) => {
+  try {
+    const factions = await prisma.faction.findMany({
+      include: {
+        users: { select: { totalPoints: true } },
+        creator: { select: { username: true } },
+      },
+      orderBy: { createdAt: 'desc' },
+    });
+    const result = factions.map(f => ({
+      id: f.id,
+      name: f.name,
+      color: f.color,
+      icon: f.icon,
+      description: f.description,
+      memberCount: f.users.length,
+      totalPoints: f.users.reduce((sum, u) => sum + u.totalPoints, 0),
+      createdAt: f.createdAt,
+      creatorName: f.creator?.username ?? null,
+    }));
+    return res.json(result);
+  } catch (error) {
+    return res.status(500).json({ error: 'Failed to fetch factions' });
+  }
+});
+
+app.post('/factions', async (req: Request, res: Response) => {
+  const { name, color, icon, description, createdBy } = req.body;
+  if (!name || !color) {
+    return res.status(400).json({ error: 'name and color are required' });
+  }
+  try {
+    const faction = await prisma.faction.create({
+      data: {
+        name: name.trim(),
+        color,
+        icon: icon || '⚔️',
+        description: description?.trim() || null,
+        createdBy: createdBy || null,
+      },
+    });
+    if (createdBy) {
+      await prisma.user.update({ where: { id: createdBy }, data: { factionId: faction.id } });
+    }
+    return res.status(201).json(faction);
+  } catch (error) {
+    return res.status(500).json({ error: 'Failed to create faction', details: error instanceof Error ? error.message : undefined });
+  }
+});
+
+app.post('/factions/:factionId/join', async (req: Request, res: Response) => {
+  const factionId = parseInt(req.params.factionId, 10);
+  if (isNaN(factionId)) return res.status(400).json({ error: 'Invalid factionId' });
+
+  const { userId } = req.body;
+  if (!userId) return res.status(400).json({ error: 'userId is required' });
+
+  try {
+    const faction = await prisma.faction.findUnique({ where: { id: factionId } });
+    if (!faction) return res.status(404).json({ error: 'Faction not found' });
+
+    await prisma.user.update({ where: { id: userId }, data: { factionId } });
+    return res.json({ success: true, factionId: faction.id, factionName: faction.name, factionColor: faction.color, factionIcon: faction.icon });
+  } catch (error) {
+    return res.status(500).json({ error: 'Failed to join faction' });
   }
 });
 
@@ -335,8 +424,8 @@ app.get('/users/:userId/profile', async (req: Request, res: Response) => {
       id: user.id,
       username: user.username,
       factionId: user.factionId,
-      factionName: user.faction.name,
-      factionColor: user.faction.color,
+      factionName: user.faction?.name ?? null,
+      factionColor: user.faction?.color ?? null,
       totalPoints: user.totalPoints,
       level: user.level,
       profilePicture: user.profilePicture,

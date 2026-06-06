@@ -12,9 +12,14 @@ model Faction {
   id          Int       @id @default(autoincrement())
   name        String    @unique
   color       String
+  icon        String    @default("⚔️")
+  description String?
+  createdBy   Int?
+  createdAt   DateTime  @default(now())
   users       User[]
   messages    Message[]
   hexesOwned  Int       @default(0)
+  creator     User?     @relation("FactionCreator", fields: [createdBy], references: [id])
 }
 
 model Message {
@@ -29,18 +34,19 @@ model Message {
 }
 
 model User {
-  id             Int       @id @default(autoincrement())
-  email          String    @unique
-  username       String    @unique
-  password       String
-  faction        Faction   @relation(fields: [factionId], references: [id])
-  factionId      Int
-  totalPoints    Int       @default(0)
-  level          Int       @default(1)
-  profilePicture String?
-  reviews        Review[]
-  messages       Message[]
-  createdAt      DateTime  @default(now())
+  id              Int       @id @default(autoincrement())
+  email           String    @unique
+  username        String    @unique
+  password        String
+  faction         Faction?  @relation(fields: [factionId], references: [id])
+  factionId       Int?
+  totalPoints     Int       @default(0)
+  level           Int       @default(1)
+  profilePicture  String?
+  reviews         Review[]
+  messages        Message[]
+  createdAt       DateTime  @default(now())
+  createdFactions Faction[] @relation("FactionCreator")
 }
 
 model Venue {
