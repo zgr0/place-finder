@@ -33,9 +33,9 @@ export default function Map() {
       .then(setFactionRanking)
       .catch(() => {});
   }, []);
-  const lng = 29.0267;
-  const lat = 40.9882;
-  const zoom = 14;
+  const lng = 29.01;
+  const lat = 41.01;
+  const zoom = 11;
   const API_KEY = import.meta.env.VITE_MAPTILER_KEY;
 
   useEffect(() => {
@@ -106,18 +106,82 @@ export default function Map() {
         currentMap.addSource('venues', {
           type: 'geojson',
           data: json,
+          cluster: true,
+          clusterMaxZoom: 14,
+          clusterRadius: 50,
         });
 
+        // Cluster bubbles
+        currentMap.addLayer({
+          id: 'venue-clusters',
+          type: 'circle',
+          source: 'venues',
+          filter: ['has', 'point_count'],
+          paint: {
+            'circle-color': [
+              'step', ['get', 'point_count'],
+              '#ff451b', 50, '#e03e1a', 200, '#b82e10'
+            ],
+            'circle-radius': [
+              'step', ['get', 'point_count'],
+              18, 50, 26, 200, 36
+            ],
+            'circle-opacity': 0.85,
+            'circle-stroke-width': 2,
+            'circle-stroke-color': '#ffffff',
+          },
+        });
+
+        // Cluster count labels
+        currentMap.addLayer({
+          id: 'venue-cluster-count',
+          type: 'symbol',
+          source: 'venues',
+          filter: ['has', 'point_count'],
+          layout: {
+            'text-field': '{point_count_abbreviated}',
+            'text-size': 13,
+            'text-font': ['Open Sans Bold', 'Arial Unicode MS Bold'],
+          },
+          paint: { 'text-color': '#ffffff' },
+        });
+
+        // Individual dots (unclustered)
         currentMap.addLayer({
           id: 'venue-dots',
           type: 'circle',
           source: 'venues',
+          filter: ['!', ['has', 'point_count']],
           paint: {
             'circle-radius': 6,
             'circle-color': '#ff451b',
             'circle-stroke-width': 2,
             'circle-stroke-color': '#ffffff',
           },
+        });
+
+        // Click cluster → zoom in
+        currentMap.on('click', 'venue-clusters', (e) => {
+          const features = currentMap.queryRenderedFeatures(e.point, { layers: ['venue-clusters'] });
+          const clusterId = features[0]?.properties?.cluster_id;
+          if (clusterId == null) return;
+          (currentMap.getSource('venues') as maplibregl.GeoJSONSource).getClusterExpansionZoom(
+            clusterId,
+            (err, zoom) => {
+              if (err) return;
+              currentMap.easeTo({
+                center: (features[0].geometry as any).coordinates,
+                zoom: zoom!,
+              });
+            }
+          );
+        });
+
+        currentMap.on('mouseenter', 'venue-clusters', () => {
+          currentMap.getCanvas().style.cursor = 'pointer';
+        });
+        currentMap.on('mouseleave', 'venue-clusters', () => {
+          currentMap.getCanvas().style.cursor = '';
         });
 
         const hoverPopup = new maplibregl.Popup({

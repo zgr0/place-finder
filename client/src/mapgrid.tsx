@@ -22,8 +22,8 @@ const MapGrid = () => {
         const map = new maplibregl.Map({
             container: mapContainer.current!,
             style: 'https://basemaps.cartocdn.com/gl/dark-matter-gl-style/style.json', // VOYAGER-H3 için koyu tema
-            center: [29.0267, 40.9882], // Kadıköy
-            zoom: 14,
+            center: [29.01, 41.01], // Istanbul
+            zoom: 11,
         });
 
         mapRef.current = map;

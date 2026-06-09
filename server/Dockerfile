@@ -6,7 +6,7 @@ COPY package*.json ./
 COPY prisma ./prisma
 RUN npm install --legacy-peer-deps
 COPY . .
-RUN npx prisma generate
+RUN DATABASE_URL="postgresql://dummy:dummy@localhost/dummy" npx prisma generate
 RUN npm run build
 # Stage 2: Run
 FROM node:22-alpine
