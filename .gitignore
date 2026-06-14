@@ -83,6 +83,7 @@ public
 .storybook-out
 
 # Temporary folders
+outputs/    
 tmp/
 temp/
 dataset.json
