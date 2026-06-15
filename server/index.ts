@@ -2,9 +2,13 @@ import 'dotenv/config';
 import express, { Request, Response } from 'express';
 import cors from 'cors';
 import bcrypt from 'bcrypt';
+import axios from 'axios';
 import { PrismaClient } from '@prisma/client';
 import { PrismaPg } from '@prisma/adapter-pg';
 import { parseCafeGeoJson } from './parser';
+
+// In-memory cache for on-demand venue enrichment
+const enrichmentCache = new Map<string, Record<string, any>>();
 
 if (process.env.NODE_ENV !== 'test' && !process.env.DATABASE_URL) {
   throw new Error('DATABASE_URL must be set in environment variables');
@@ -27,6 +31,42 @@ app.get('/venues', (req: Request, res: Response) => {
   }
 });
 
+app.get('/venues/enrich', async (req: Request, res: Response) => {
+  const { name, lat, lng } = req.query as Record<string, string>;
+  if (!name || !lat || !lng) return res.status(400).json({ error: 'name, lat, lng required' });
+
+  const cacheKey = `${name}|${parseFloat(lat).toFixed(4)}|${parseFloat(lng).toFixed(4)}`;
+  if (enrichmentCache.has(cacheKey)) return res.json(enrichmentCache.get(cacheKey));
+
+  const FSQ_KEY = process.env.FSQ_API_KEY;
+  if (!FSQ_KEY) return res.json({});
+
+  try {
+    const searchRes = await axios.get('https://api.foursquare.com/v3/places/search', {
+      headers: { Authorization: FSQ_KEY },
+      params: { query: name, ll: `${lat},${lng}`, limit: 1, radius: 500 },
+    });
+    const fsqId = searchRes.data.results?.[0]?.fsq_id;
+    if (!fsqId) { enrichmentCache.set(cacheKey, {}); return res.json({}); }
+
+    const detailRes = await axios.get(`https://api.foursquare.com/v3/places/${fsqId}`, {
+      headers: { Authorization: FSQ_KEY },
+      params: { fields: 'tel,website,hours,location' },
+    });
+    const d = detailRes.data;
+    const result: Record<string, any> = {};
+    if (d.tel) result.phone = d.tel;
+    if (d.website) result.website = d.website;
+    if (d.hours?.display?.length) result.opening_hours = d.hours.display.join('; ');
+    if (d.location?.address) result['addr:street'] = d.location.address;
+
+    enrichmentCache.set(cacheKey, result);
+    return res.json(result);
+  } catch {
+    return res.json({});
+  }
+});
+
 app.get('/auth/register', (req: Request, res: Response) => {
   res.status(405).json({ message: 'Use POST /auth/register to create a new account' });
 });
@@ -34,8 +74,8 @@ app.get('/auth/register', (req: Request, res: Response) => {
 app.post('/auth/register', async (req: Request, res: Response) => {
   const { email: rawEmail, username, password, factionId } = req.body;
 
-  if (!rawEmail || !username || !password) {
-    return res.status(400).json({ error: 'email, username, and password are required' });
+  if (!rawEmail || !username || !password || !factionId) {
+    return res.status(400).json({ error: 'email, username, password, and factionId are required' });
   }
 
   const email = rawEmail.toLowerCase().trim();

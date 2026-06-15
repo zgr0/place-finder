@@ -7,6 +7,7 @@ import ReviewModal from './Review';
 declare global {
   interface Window {
     openReviewModal: (venueName: string) => void;
+    loadVenueDetails: (name: string, lat: number, lng: number) => void;
   }
 }
 
@@ -22,6 +23,7 @@ export default function Map() {
   const mapContainer = useRef<HTMLDivElement | null>(null);
   const map = useRef<maplibregl.Map | null>(null);
   const [mapError, setMapError] = useState<string | null>(null);
+  const [venueError, setVenueError] = useState<string | null>(null);
   const [isLoadingMap, setIsLoadingMap] = useState(true);
   const [selectedVenueForReview, setSelectedVenueForReview] = useState<string | null>(null);
   const [factionRanking, setFactionRanking] = useState<FactionRank[]>([]);
@@ -65,12 +67,16 @@ export default function Map() {
       style: 'https://api.maptiler.com/maps/streets/style.json?key=' + API_KEY,
       center: [lng, lat],
       zoom,
+      pitch: 45,
+      bearing: -17.6,
       canvasContextAttributes: {
-        antialias: false,
+        antialias: true,
         preserveDrawingBuffer: false,
         failIfMajorPerformanceCaveat: false,
       },
     });
+
+    map.current.addControl(new maplibregl.NavigationControl({ visualizePitch: true }), 'top-right');
 
     const currentMap = map.current;
     const canvas = currentMap.getCanvas();
@@ -90,13 +96,54 @@ export default function Map() {
     canvas.addEventListener('webglcontextlost', handleContextLost);
     canvas.addEventListener('webglcontextrestored', handleContextRestored);
 
+    // Only log errors, never kill the map for non-critical issues
     currentMap.on('error', (error) => {
-      console.error('MapLibre error event:', error);
-      setMapError('MapLibre failed to initialize. Check browser console for details.');
+      console.warn('MapLibre error (non-fatal):', error);
     });
 
     currentMap.on('load', async () => {
       try {
+        // Terrain
+        try {
+          currentMap.addSource('terrain-dem', {
+            type: 'raster-dem',
+            url: `https://api.maptiler.com/tiles/terrain-rgb-v2/tiles.json?key=${API_KEY}`,
+            tileSize: 256,
+          });
+          currentMap.setTerrain({ source: 'terrain-dem', exaggeration: 1.5 });
+        } catch (e) { console.warn('Terrain failed:', e); }
+
+        // Sky + atmospheric fog (MapLibre v5 API)
+        try {
+          currentMap.setSky({
+            'sky-color': '#1a3a5c',
+            'horizon-color': '#87ceeb',
+            'fog-color': '#c9dff0',
+            'fog-ground-blend': 0.5,
+            'horizon-fog-blend': 0.8,
+            'sky-horizon-blend': 0.8,
+            'atmosphere-blend': 0.8,
+          });
+        } catch (e) { console.warn('Sky failed:', e); }
+
+        // Directional sun light for building shadows
+        try {
+          currentMap.setLight({
+            anchor: 'map',
+            position: [1.5, 210, 30],
+            color: '#fffaf0',
+            intensity: 0.6,
+          });
+        } catch (e) { console.warn('Light failed:', e); }
+
+        // Enhance existing building-3d layer instead of adding duplicate
+        try {
+          if (currentMap.getLayer('building-3d')) {
+            currentMap.setPaintProperty('building-3d', 'fill-extrusion-opacity', 0.85);
+            currentMap.setPaintProperty('building-3d', 'fill-extrusion-vertical-gradient', true);
+          }
+        } catch (e) { console.warn('Building layer update failed:', e); }
+
         console.log('Map loaded, fetching venues');
         const res = await fetch('http://localhost:3000/venues');
         if (!res.ok) throw new Error(`Fetch failed ${res.status}`);
@@ -165,16 +212,15 @@ export default function Map() {
           const features = currentMap.queryRenderedFeatures(e.point, { layers: ['venue-clusters'] });
           const clusterId = features[0]?.properties?.cluster_id;
           if (clusterId == null) return;
-          (currentMap.getSource('venues') as maplibregl.GeoJSONSource).getClusterExpansionZoom(
-            clusterId,
-            (err, zoom) => {
-              if (err) return;
+          (currentMap.getSource('venues') as maplibregl.GeoJSONSource)
+            .getClusterExpansionZoom(clusterId)
+            .then(zoom => {
               currentMap.easeTo({
                 center: (features[0].geometry as any).coordinates,
-                zoom: zoom!,
+                zoom,
               });
-            }
-          );
+            })
+            .catch(() => {});
         });
 
         currentMap.on('mouseenter', 'venue-clusters', () => {
@@ -185,11 +231,82 @@ export default function Map() {
         });
 
         const hoverPopup = new maplibregl.Popup({
-          closeButton: false,
+          closeButton: true,
           closeOnClick: false,
+          maxWidth: '320px',
         });
 
         let popupTimeout: ReturnType<typeof setTimeout>;
+        // Client-side enrichment cache keyed by "name|lat|lng"
+        const enrichCache: Record<string, Record<string, any>> = {};
+        let currentPopupMerged: Record<string, any> = {};
+        let currentPopupCoords: [number, number] = [0, 0];
+
+        function buildPopupHtml(props: Record<string, any>, loading = false): string {
+          const type = props.cuisine
+            ? `${props.amenity || 'Unknown'} • ${props.cuisine.replace(/_/g, ' ')}`
+            : (props.amenity || 'Unknown Type');
+          const address = props['addr:street']
+            ? `${props['addr:street']} ${props['addr:housenumber'] || ''}`.trim()
+            : null;
+          const hasMissing = !props.phone || !props.website || !props.opening_hours || !props['addr:street'];
+          const venueName = (props.name || 'Unknown Venue').replace(/'/g, "\\'");
+
+          let html = `<div style="font-family: inherit; display: flex; flex-direction: column; gap: 4px; padding: 2px; min-width: 200px;">`;
+          html += `<strong style="font-size: 14px;">${props.name || 'Unknown Venue'}</strong>`;
+          html += `<div style="font-size: 12px; color: #666; text-transform: capitalize;">${type}</div>`;
+
+          if (address) {
+            html += `<div style="font-size: 12px;">📍 ${address}</div>`;
+          }
+          if (props.opening_hours) {
+            html += `<div style="font-size: 12px;">🕐 ${props.opening_hours}</div>`;
+          }
+          if (props.phone) {
+            html += `<div style="font-size: 12px;">📞 ${props.phone}</div>`;
+          }
+          if (props.website) {
+            const href = props.website.startsWith('http') ? props.website : 'https://' + props.website;
+            html += `<div style="font-size: 12px;"><a href="${href}" target="_blank" rel="noopener noreferrer" style="color: #3b82f6;">🌐 Website</a></div>`;
+          }
+          if (props['brand:wikipedia']) {
+            const wikiHref = `https://${props['brand:wikipedia'].replace(':', '.wikipedia.org/wiki/')}`;
+            html += `<div style="font-size: 12px;"><a href="${wikiHref}" target="_blank" rel="noopener noreferrer" style="color: #3b82f6;">📖 Wikipedia</a></div>`;
+          }
+
+          if (hasMissing) {
+            if (loading) {
+              html += `<div style="font-size: 11px; color: #888; margin-top: 4px;">Loading details...</div>`;
+            } else {
+              const [lng, lat] = currentPopupCoords;
+              html += `<div style="margin-top: 4px;"><button onclick="window.loadVenueDetails('${venueName}',${lat},${lng})" style="background: none; border: 1px solid #ccc; border-radius: 4px; padding: 3px 8px; font-size: 11px; cursor: pointer; color: #555;">Load missing info</button></div>`;
+            }
+          }
+
+          html += `<div style="margin-top: 8px;"><button onclick="window.openReviewModal('${venueName}')" style="display: inline-block; background-color: #3b82f6; color: white; padding: 8px 16px; border: none; border-radius: 6px; cursor: pointer; font-weight: bold; width: 100%;">View & Write Reviews</button></div>`;
+          html += `</div>`;
+          return html;
+        }
+
+        window.loadVenueDetails = async (name: string, lat: number, lng: number) => {
+          const key = `${name}|${lat.toFixed(4)}|${lng.toFixed(4)}`;
+          if (key in enrichCache) return;
+
+          // Show loading state
+          hoverPopup.setHTML(buildPopupHtml(currentPopupMerged, true));
+
+          try {
+            const res = await fetch(`http://localhost:3000/venues/enrich?name=${encodeURIComponent(name)}&lat=${lat}&lng=${lng}`);
+            const enriched = await res.json();
+            enrichCache[key] = enriched;
+            // Merge enriched into current props
+            currentPopupMerged = { ...currentPopupMerged, ...enriched };
+            hoverPopup.setHTML(buildPopupHtml(currentPopupMerged));
+          } catch {
+            enrichCache[key] = {};
+            hoverPopup.setHTML(buildPopupHtml(currentPopupMerged));
+          }
+        };
 
         currentMap.on('mouseenter', 'venue-dots', () => {
           currentMap.getCanvas().style.cursor = 'pointer';
@@ -197,66 +314,61 @@ export default function Map() {
 
         currentMap.on('mouseleave', 'venue-dots', () => {
           currentMap.getCanvas().style.cursor = '';
-          popupTimeout = setTimeout(() => {
-            hoverPopup.remove();
-          }, 300);
         });
 
-        currentMap.on('mousemove', 'venue-dots', (e) => {
-          const feature = e.features?.[0];
-          if (!feature) return;
+        // Hide popup when cursor leaves map canvas entirely
+        currentMap.getCanvas().addEventListener('mouseleave', () => {
+          popupTimeout = setTimeout(() => hoverPopup.remove(), 300);
+        });
 
+        function showVenuePopup(feature: maplibregl.MapGeoJSONFeature, lngLat: maplibregl.LngLat) {
           const props = feature.properties as Record<string, any>;
-          const coordinates = (feature.geometry as any).coordinates;
+          const coordinates = (feature.geometry as any).coordinates as [number, number];
+          currentPopupCoords = coordinates;
 
-          const type = props.cuisine ? `${props.amenity || 'Unknown'} • ${props.cuisine.replace(/_/g, ' ')}` : (props.amenity || 'Unknown Type');
-          const address = props['addr:street'] ? `${props['addr:street']} ${props['addr:housenumber'] || ''}`.trim() : 'Address not available';
-          const hours = props.opening_hours || 'Hours not available';
-          const phone = props.phone || 'Phone not available';
-          const websiteText = props.website ? 'Website available (click)' : 'No website available';
-          
-          let html = `<div style="font-family: inherit; display: flex; flex-direction: column; gap: 4px; padding: 2px;">`;
-          html += `<strong style="font-size: 14px;">${props.name || 'Unknown Venue'}</strong>`;
-          html += `<div style="font-size: 12px; color: #666; text-transform: capitalize;">${type}</div>`;
-          html += `<div style="font-size: 12px;">${address}</div>`;
-          html += `<div style="font-size: 12px;">${hours}</div>`;
-          html += `<div style="font-size: 12px;">${phone}</div>`;
-          if (props.website) {
-            html += `<div style="font-size: 12px;"><a href="${props.website.startsWith('http') ? props.website : 'https://' + props.website}" target="_blank" rel="noopener noreferrer" style="color: #3b82f6;">Visit Website</a></div>`;
-          } else {
-            html += `<div style="font-size: 12px; color: #999;">No website</div>`;
-          }
-
-          if (props['brand:wikipedia']) {
-            html += `<div style="font-size: 12px;"><a href="https://${props['brand:wikipedia'].replace(':', '.wikipedia.org/wiki/')}" target="_blank" rel="noopener noreferrer" style="color: #3b82f6;">Wikipedia Info</a></div>`;
-          } else {
-            html += `<div style="font-size: 12px; color: #999;">No Wiki info</div>`;
-          }
-          
-          html += `<div style="margin-top: 12px; text-align: center;"><button onclick="window.openReviewModal('${(props.name || 'Unknown Venue').replace(/'/g, "\\'")}')" style="display: inline-block; background-color: #3b82f6; color: white; padding: 8px 16px; border: none; border-radius: 6px; cursor: pointer; font-weight: bold; width: 100%; transition: background-color 0.2s;">View & Write Reviews</button></div>`;
-          html += `</div>`;
+          const key = `${props.name}|${coordinates[1].toFixed(4)}|${coordinates[0].toFixed(4)}`;
+          const cached = enrichCache[key] ?? {};
+          currentPopupMerged = { ...props, ...cached };
 
           clearTimeout(popupTimeout);
+          // Use cursor lngLat (not geometry coords) so popup renders above terrain surface
           hoverPopup
-            .setLngLat(coordinates)
-            .setHTML(html)
+            .setLngLat(lngLat)
+            .setHTML(buildPopupHtml(currentPopupMerged))
             .addTo(currentMap);
-            
+
           const popupEl = hoverPopup.getElement();
           if (popupEl) {
-            popupEl.addEventListener('mouseenter', () => {
-              clearTimeout(popupTimeout);
-            });
+            popupEl.addEventListener('mouseenter', () => clearTimeout(popupTimeout));
             popupEl.addEventListener('mouseleave', () => {
-              popupTimeout = setTimeout(() => {
-                hoverPopup.remove();
-              }, 300);
+              popupTimeout = setTimeout(() => hoverPopup.remove(), 300);
             });
           }
+        }
+
+        // Layer-specific mousemove (works at low pitch)
+        currentMap.on('mousemove', 'venue-dots', (e) => {
+          const feature = e.features?.[0];
+          if (feature) showVenuePopup(feature, e.lngLat);
+        });
+
+        // Fallback: general mousemove + queryRenderedFeatures (works at high pitch/terrain)
+        currentMap.on('mousemove', (e) => {
+          const features = currentMap.queryRenderedFeatures(e.point, { layers: ['venue-dots'] });
+          if (features.length > 0) {
+            showVenuePopup(features[0], e.lngLat);
+          }
+        });
+
+        currentMap.on('click', 'venue-dots', (e) => {
+          const feature = e.features?.[0];
+          if (!feature) return;
+          clearTimeout(popupTimeout);
+          showVenuePopup(feature, e.lngLat);
         });
       } catch (error) {
         console.error('Error fetching or adding venues:', error);
-        setMapError('Failed to load venue data from the server.');
+        setVenueError('Could not load venues. Is the server running on port 3000?');
       } finally {
         setIsLoadingMap(false);
       }
@@ -303,6 +415,16 @@ export default function Map() {
           </div>
         )}
         <div ref={mapContainer} className="map" />
+
+        {venueError && (
+          <div style={{
+            position: 'absolute', top: 12, left: '50%', transform: 'translateX(-50%)',
+            background: '#7f1d1d', color: '#fca5a5', padding: '8px 16px',
+            borderRadius: 8, fontSize: 13, zIndex: 10, maxWidth: 360, textAlign: 'center',
+          }}>
+            {venueError}
+          </div>
+        )}
 
         {/* Faction ranking widget */}
         <div className="map-ranking-widget">

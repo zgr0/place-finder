@@ -100,16 +100,20 @@ describe('Backend API Endpoints', () => {
         email: 'test@example.com',
         username: 'TestUser',
         factionId: 1,
+        factionName: null,
+        factionColor: null,
+        factionIcon: null,
       });
 
       expect(bcrypt.hash).toHaveBeenCalledWith('password_123', 10);
       expect(mockPrismaUser.create).toHaveBeenCalledWith({
         data: {
-          email: 'test@example.com', // Assert normalization
+          email: 'test@example.com',
           username: 'TestUser',
           password: 'hashedPassword123',
           factionId: 1,
         },
+        include: { faction: { select: { name: true, color: true, icon: true } } },
       });
     });
 
@@ -150,9 +154,9 @@ describe('Backend API Endpoints', () => {
         .send({ email: '   test@example.com', password: 'password_123' });
 
       expect(res.status).toBe(200);
-      expect(res.body).toEqual({ id: 1, username: 'TestUser', factionId: 2 });
+      expect(res.body).toEqual({ id: 1, username: 'TestUser', factionId: 2, factionName: null, factionColor: null, factionIcon: null });
 
-      expect(mockPrismaUser.findUnique).toHaveBeenCalledWith({ where: { email: 'test@example.com' } });
+      expect(mockPrismaUser.findUnique).toHaveBeenCalledWith({ where: { email: 'test@example.com' }, include: { faction: { select: { name: true, color: true, icon: true } } } });
       expect(bcrypt.compare).toHaveBeenCalledWith('password_123', 'hashedPassword123');
     });
 
