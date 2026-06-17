@@ -1,11 +1,10 @@
 import { StatusBar } from 'expo-status-bar';
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import {
   StyleSheet,
   Text,
   View,
   TouchableOpacity,
-  SafeAreaView,
   Platform,
   TextInput,
   KeyboardAvoidingView,
@@ -14,21 +13,36 @@ import {
   Alert,
   Image,
   ActivityIndicator,
+  RefreshControl,
 } from 'react-native';
+import { SafeAreaView, SafeAreaProvider } from 'react-native-safe-area-context';
 import * as Location from 'expo-location';
-import MapView, { Circle, Marker } from 'react-native-maps';
-import Svg, { Polygon, G } from 'react-native-svg';
+import MapView, { Circle, Marker, Polygon } from 'react-native-maps';
 
 const { width } = Dimensions.get('window');
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
 type AuthMode = 'login' | 'register';
+type Tab = 'map' | 'hex' | 'factions' | 'profile';
+type SubScreen = null | 'createFaction' | 'factionChat';
 
 interface AuthUser {
   id: number;
   username: string;
   factionId: number;
+}
+
+interface FactionInfo {
+  id: number;
+  name: string;
+  color: string;
+  icon: string;
+  description: string | null;
+  memberCount: number;
+  totalPoints: number;
+  createdAt: string;
+  creatorName: string | null;
 }
 
 interface RecentReview {
@@ -69,10 +83,13 @@ const C = {
   success:      '#34d399',
 };
 
-const FACTIONS = [
-  { id: 1, name: 'Red Reapers',     color: '#ef4444' },
-  { id: 2, name: 'Blue Sentinels',  color: '#3b82f6' },
-  { id: 3, name: 'Green Guardians', color: '#10b981' },
+const PRESET_COLORS = ['#ef4444', '#f97316', '#eab308', '#22c55e', '#3b82f6', '#8b5cf6', '#ec4899', '#06b6d4'];
+
+const EMOJI_OPTIONS = [
+  '⚔️','🛡️','🏰','👑','🔥','⚡','🌊','🌪️',
+  '🐉','🦁','🐺','🦅','🦊','🐻','🦈','🦂',
+  '💀','🗡️','🪓','🏹','🔱','⚜️','🌟','💥',
+  '🧊','🌑','☠️','🎯','🪬','🔮','🧿','🪄',
 ];
 
 // Note: Adjust this URL based on your environment
@@ -82,6 +99,7 @@ const FACTIONS = [
 const API_BASE_URL = 'http://10.0.2.2:3000';
 
 const REVIEW_RADIUS = 300; // metres
+
 
 function haversineDistance(lat1: number, lon1: number, lat2: number, lon2: number): number {
   const R = 6_371_000;
@@ -144,7 +162,6 @@ const VenueReviewSheet = ({
     <View style={sheetStyles.sheet}>
       <View style={sheetStyles.handle} />
 
-      {/* Header */}
       <View style={sheetStyles.header}>
         <View style={{ flex: 1 }}>
           <Text style={sheetStyles.venueName} numberOfLines={1}>{venue.name}</Text>
@@ -155,7 +172,6 @@ const VenueReviewSheet = ({
         </TouchableOpacity>
       </View>
 
-      {/* Distance pill */}
       <View style={[sheetStyles.distancePill, { borderColor: isNearby ? '#10b981' : distance === null ? C.border : '#f87171' }]}>
         <Text style={{ fontSize: 13 }}>{isNearby ? '✅' : distance === null ? '📡' : '📍'}</Text>
         <Text style={[sheetStyles.distanceText, { color: isNearby ? '#10b981' : distance === null ? C.textMuted : '#f87171' }]}>
@@ -167,14 +183,12 @@ const VenueReviewSheet = ({
         </Text>
       </View>
 
-      {/* Body */}
       {!authUser ? (
         <Text style={sheetStyles.prompt}>Log in to write a review.</Text>
       ) : submitted ? (
         <Text style={sheetStyles.success}>✓ Review submitted!</Text>
       ) : (
         <>
-          {/* Stars */}
           <View style={sheetStyles.stars}>
             {[1, 2, 3, 4, 5].map(s => (
               <TouchableOpacity key={s} onPress={() => isNearby && setRating(s)} activeOpacity={0.7}>
@@ -187,7 +201,6 @@ const VenueReviewSheet = ({
               </TouchableOpacity>
             ))}
           </View>
-          {/* Comment */}
           <TextInput
             style={[sheetStyles.commentInput, !isNearby && { opacity: 0.3 }]}
             placeholder="Share your experience (optional)"
@@ -197,7 +210,6 @@ const VenueReviewSheet = ({
             multiline
             editable={isNearby}
           />
-          {/* Submit */}
           <TouchableOpacity
             style={[sheetStyles.submitBtn, !canReview && { opacity: 0.35 }]}
             onPress={handleSubmit}
@@ -280,80 +292,268 @@ const sheetStyles = StyleSheet.create({
   },
 });
 
-// ─── HexGrid ──────────────────────────────────────────────────────────────────
+// ─── BackHeader ───────────────────────────────────────────────────────────────
 
-const HexGrid = () => {
-  const hexSize = 38;
-  const hexWidth = hexSize * Math.sqrt(3);
-  const hexHeight = hexSize * 2;
-  const columns = 5;
-  const rows = 5;
+const BackHeader = ({ onBack, title }: { onBack: () => void; title: string }) => (
+  <View style={backHeaderStyles.container}>
+    <TouchableOpacity onPress={onBack} style={backHeaderStyles.backBtn} activeOpacity={0.7}>
+      <Text style={backHeaderStyles.backText}>← Back</Text>
+    </TouchableOpacity>
+    <Text style={backHeaderStyles.title} numberOfLines={1}>{title}</Text>
+    <View style={{ width: 70 }} />
+  </View>
+);
 
-  const renderHex = (col: number, row: number) => {
-    const x = col * hexWidth + (row % 2 === 1 ? hexWidth / 2 : 0) + 48;
-    const y = row * (hexHeight * 0.75) + 48;
-    const factionIdx = Math.floor(Math.random() * 4);
-    const color = factionIdx < 3 ? FACTIONS[factionIdx].color : '#1C1A24';
-    const points = [];
-    for (let i = 0; i < 6; i++) {
-      const angle = (Math.PI / 180) * (60 * i - 30);
-      points.push(`${x + hexSize * Math.cos(angle)},${y + hexSize * Math.sin(angle)}`);
+const backHeaderStyles = StyleSheet.create({
+  container: {
+    flexDirection:    'row',
+    alignItems:       'center',
+    justifyContent:   'space-between',
+    paddingHorizontal: 16,
+    paddingVertical:  14,
+    backgroundColor:  C.card,
+    borderBottomWidth: 1,
+    borderBottomColor: C.border,
+    borderTopWidth:   2,
+    borderTopColor:   C.primary,
+  },
+  backBtn: {
+    paddingVertical: 4,
+    paddingRight: 12,
+    width: 70,
+  },
+  backText: {
+    color:     C.primary,
+    fontSize:  14,
+    fontWeight: '600',
+  },
+  title: {
+    flex:          1,
+    textAlign:     'center',
+    color:         C.textMain,
+    fontWeight:    '700',
+    fontSize:      15,
+    letterSpacing: 1,
+    textTransform: 'uppercase',
+  },
+});
+
+// ─── RealHexGrid ─────────────────────────────────────────────────────────────
+// Hex cells + boundaries are computed server-side (h3-js v4 / Node.js).
+// Mobile only renders the polygons returned by /territory/hexgrid.
+
+interface HexCell {
+  h3Index: string;
+  factionId: number | null;
+  boundary: { latitude: number; longitude: number }[];
+}
+
+const RealHexGrid = ({ factions }: { factions: FactionInfo[] }) => {
+  const [hexData,      setHexData]      = useState<HexCell[]>([]);
+  const [loading,      setLoading]      = useState(false);
+  const [tooZoomedOut, setTooZoomedOut] = useState(false);
+  const fetchTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Build faction color map from live faction list
+  const colorMap = useCallback((): Record<number, string> => {
+    const map: Record<number, string> = { 1: '#FF3333', 2: '#3333FF', 3: '#33FF33' };
+    factions.forEach(f => { map[f.id] = f.color; });
+    return map;
+  }, [factions]);
+
+  const updateHexes = useCallback(async (region: {
+    latitude: number; longitude: number;
+    latitudeDelta: number; longitudeDelta: number;
+  }) => {
+    const { latitude, longitude, latitudeDelta, longitudeDelta } = region;
+
+    if (latitudeDelta > 0.18) {
+      setTooZoomedOut(true);
+      setHexData([]);
+      return;
     }
-    return (
-      <G key={`${col}-${row}`}>
-        <Polygon points={points.join(' ')} fill={color} stroke={C.border} strokeWidth="1.5" opacity={0.85} />
-      </G>
-    );
+    setTooZoomedOut(false);
+    setLoading(true);
+
+    try {
+      const res = await fetch(`${API_BASE_URL}/territory/hexgrid`, {
+        method:  'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          north: latitude + latitudeDelta / 2,
+          south: latitude - latitudeDelta / 2,
+          east:  longitude + longitudeDelta / 2,
+          west:  longitude - longitudeDelta / 2,
+        }),
+      });
+
+      if (!res.ok) {
+        const data = await res.json().catch(() => null);
+        if (data?.tooLarge) { setTooZoomedOut(true); setHexData([]); }
+        return;
+      }
+
+      setHexData(await res.json());
+    } catch {
+      // silent — backend might be down
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  const handleRegionChange = useCallback((region: any) => {
+    if (fetchTimer.current) clearTimeout(fetchTimer.current);
+    fetchTimer.current = setTimeout(() => updateHexes(region), 600);
+  }, [updateHexes]);
+
+  const initialRegion = {
+    latitude: 40.9882, longitude: 29.0267,
+    latitudeDelta: 0.05, longitudeDelta: 0.05,
   };
 
-  const hexes = [];
-  for (let r = 0; r < rows; r++) {
-    for (let c = 0; c < columns; c++) {
-      hexes.push(renderHex(c, r));
-    }
-  }
+  const colors = colorMap();
 
   return (
-    <ScrollView style={{ flex: 1, backgroundColor: C.bg }} contentContainerStyle={styles.screenContainer}>
-      <Text style={styles.screenTitle}>Territory Control</Text>
-      <Text style={styles.screenSubtitle}>H3 hex grid — faction dominance overview</Text>
-      <View style={styles.hexContainer}>
-        <Svg height="400" width={width - 48}>{hexes}</Svg>
-      </View>
-      <View style={styles.legend}>
-        {FACTIONS.map(f => (
-          <View key={f.id} style={styles.legendItem}>
-            <View style={[styles.colorBox, { backgroundColor: f.color }]} />
-            <Text style={styles.legendText}>{f.name}</Text>
+    <View style={{ flex: 1 }}>
+      <MapView
+        style={styles.map}
+        initialRegion={initialRegion}
+        userInterfaceStyle="dark"
+        customMapStyle={darkMapStyle}
+        onRegionChangeComplete={handleRegionChange}
+        onMapReady={() => updateHexes(initialRegion)}
+      >
+        {hexData.map(hex => {
+          const fill = hex.factionId != null
+            ? (colors[hex.factionId] ?? '#888888') + '66'
+            : '#44444466';
+          return (
+            <Polygon
+              key={hex.h3Index}
+              coordinates={hex.boundary}
+              fillColor={fill}
+              strokeColor="rgba(255,255,255,0.18)"
+              strokeWidth={0.5}
+            />
+          );
+        })}
+      </MapView>
+
+      {loading && (
+        <View style={hexGridStyles.loadingOverlay}>
+          <ActivityIndicator color={C.primary} size="small" />
+        </View>
+      )}
+
+      {tooZoomedOut && (
+        <View style={hexGridStyles.zoomHint}>
+          <Text style={hexGridStyles.zoomHintText}>Zoom in to see territory</Text>
+        </View>
+      )}
+
+      <View style={hexGridStyles.legend}>
+        {[
+          { color: '#FF3333', name: 'Red' },
+          { color: '#3333FF', name: 'Blue' },
+          { color: '#33FF33', name: 'Green' },
+          { color: '#444444', name: 'Unclaimed' },
+        ].map(f => (
+          <View key={f.name} style={hexGridStyles.legendItem}>
+            <View style={[hexGridStyles.legendDot, { backgroundColor: f.color }]} />
+            <Text style={hexGridStyles.legendText}>{f.name}</Text>
           </View>
         ))}
       </View>
-    </ScrollView>
+    </View>
   );
 };
+
+const hexGridStyles = StyleSheet.create({
+  loadingOverlay: {
+    position:        'absolute',
+    top:             16,
+    right:           16,
+    backgroundColor: 'rgba(12,11,16,0.75)',
+    borderRadius:    6,
+    padding:         8,
+    borderWidth:     1,
+    borderColor:     C.border,
+  },
+  zoomHint: {
+    position:        'absolute',
+    top:             20,
+    alignSelf:       'center',
+    backgroundColor: 'rgba(12,11,16,0.85)',
+    borderRadius:    6,
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderWidth:     1,
+    borderColor:     C.border,
+    borderTopWidth:  2,
+    borderTopColor:  C.primary,
+  },
+  zoomHintText: {
+    color:     C.textMuted,
+    fontSize:  13,
+    fontWeight: '600',
+  },
+  legend: {
+    position:        'absolute',
+    bottom:          20,
+    left:            16,
+    backgroundColor: 'rgba(12,11,16,0.85)',
+    borderRadius:    8,
+    borderWidth:     1,
+    borderColor:     C.border,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    gap:             6,
+  },
+  legendItem: {
+    flexDirection: 'row',
+    alignItems:    'center',
+    gap:           8,
+  },
+  legendDot: {
+    width: 10, height: 10, borderRadius: 2,
+  },
+  legendText: {
+    color:    C.textMuted,
+    fontSize: 12,
+  },
+});
 
 // ─── AuthScreen ───────────────────────────────────────────────────────────────
 
 const AuthScreen = ({
-  mode,
-  setMode,
-  onLoginSuccess,
+  mode, setMode, onLoginSuccess, factions,
 }: {
   mode: AuthMode;
   setMode: (m: AuthMode) => void;
   onLoginSuccess: (user: AuthUser) => void;
+  factions: FactionInfo[];
 }) => {
   const [email,     setEmail]     = useState('');
   const [password,  setPassword]  = useState('');
   const [username,  setUsername]  = useState('');
-  const [factionId, setFactionId] = useState(1);
+  const [factionId, setFactionId] = useState(0);
   const [loading,   setLoading]   = useState(false);
   const [errorMsg,  setErrorMsg]  = useState('');
+
+  useEffect(() => {
+    if (factionId === 0 && factions.length > 0) {
+      setFactionId(factions[0].id);
+    }
+  }, [factions]);
 
   const handleSubmit = async () => {
     setErrorMsg('');
     if (!email || !password || (mode === 'register' && !username)) {
       setErrorMsg('Please fill in all fields.');
+      return;
+    }
+    if (mode === 'register' && factionId === 0) {
+      setErrorMsg('Please select a faction.');
       return;
     }
     setLoading(true);
@@ -388,14 +588,12 @@ const AuthScreen = ({
     >
       <ScrollView contentContainerStyle={styles.authScroll} keyboardShouldPersistTaps="handled">
 
-        {/* Logo */}
         <View style={styles.logoContainer}>
           <Text style={styles.logoEmoji}>◎</Text>
           <Text style={styles.logoText}>PLACE FINDER</Text>
           <Text style={styles.logoTagline}>Claim your territory</Text>
         </View>
 
-        {/* Mode tabs */}
         <View style={styles.modeTabs}>
           <TouchableOpacity
             style={[styles.modeTab, mode === 'login' && styles.modeTabActive]}
@@ -417,7 +615,6 @@ const AuthScreen = ({
           </TouchableOpacity>
         </View>
 
-        {/* Form card */}
         <View style={styles.authCard}>
           {mode === 'register' && (
             <View style={styles.inputGroup}>
@@ -459,29 +656,37 @@ const AuthScreen = ({
           {mode === 'register' && (
             <View style={styles.inputGroup}>
               <Text style={styles.label}>FACTION</Text>
-              <View style={styles.factionRow}>
-                {FACTIONS.map(f => (
-                  <TouchableOpacity
-                    key={f.id}
-                    style={[
-                      styles.factionBtn,
-                      factionId === f.id && { borderColor: f.color, backgroundColor: f.color + '18' },
-                    ]}
-                    onPress={() => setFactionId(f.id)}
-                    activeOpacity={0.75}
-                  >
-                    <View style={[styles.factionDot, { backgroundColor: f.color }]} />
-                    <Text style={[styles.factionBtnText, factionId === f.id && { color: f.color }]}>
-                      {f.name}
-                    </Text>
-                    {factionId === f.id && (
-                      <View style={[styles.factionCheck, { backgroundColor: f.color }]}>
-                        <Text style={styles.factionCheckMark}>✓</Text>
-                      </View>
-                    )}
-                  </TouchableOpacity>
-                ))}
-              </View>
+              {factions.length === 0 ? (
+                <View style={{ paddingVertical: 12, alignItems: 'center' }}>
+                  <ActivityIndicator color={C.primary} />
+                  <Text style={[styles.label, { marginTop: 8 }]}>Loading factions…</Text>
+                </View>
+              ) : (
+                <View style={styles.factionRow}>
+                  {factions.map(f => (
+                    <TouchableOpacity
+                      key={f.id}
+                      style={[
+                        styles.factionBtn,
+                        factionId === f.id && { borderColor: f.color, backgroundColor: f.color + '18' },
+                      ]}
+                      onPress={() => setFactionId(f.id)}
+                      activeOpacity={0.75}
+                    >
+                      <Text style={{ fontSize: 14 }}>{f.icon}</Text>
+                      <View style={[styles.factionDot, { backgroundColor: f.color }]} />
+                      <Text style={[styles.factionBtnText, factionId === f.id && { color: f.color }]}>
+                        {f.name}
+                      </Text>
+                      {factionId === f.id && (
+                        <View style={[styles.factionCheck, { backgroundColor: f.color }]}>
+                          <Text style={styles.factionCheckMark}>✓</Text>
+                        </View>
+                      )}
+                    </TouchableOpacity>
+                  ))}
+                </View>
+              )}
             </View>
           )}
 
@@ -511,7 +716,502 @@ const AuthScreen = ({
   );
 };
 
-// ─── FactionScreen ────────────────────────────────────────────────────────────
+// ─── FactionListScreen ────────────────────────────────────────────────────────
+
+const FactionListScreen = ({
+  factions, authUser, onJoin, onCreatePress, onOpenChat, onRefresh,
+}: {
+  factions: FactionInfo[];
+  authUser: AuthUser | null;
+  onJoin: (user: AuthUser) => void;
+  onCreatePress: () => void;
+  onOpenChat: () => void;
+  onRefresh: () => Promise<void>;
+}) => {
+  const [joiningId,  setJoiningId]  = useState<number | null>(null);
+  const [error,      setError]      = useState<string | null>(null);
+  const [refreshing, setRefreshing] = useState(false);
+
+  const handleJoin = async (factionId: number) => {
+    if (!authUser) {
+      Alert.alert('Login Required', 'Log in to join a faction.', [{ text: 'OK' }]);
+      return;
+    }
+    setJoiningId(factionId);
+    setError(null);
+    try {
+      const res = await fetch(`${API_BASE_URL}/factions/${factionId}/join`, {
+        method:  'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body:    JSON.stringify({ userId: authUser.id }),
+      });
+      if (res.ok) {
+        const data = await res.json();
+        onJoin({ ...authUser, factionId: data.factionId });
+        await onRefresh();
+      } else {
+        const data = await res.json().catch(() => null);
+        setError(data?.error || 'Failed to join faction');
+      }
+    } catch {
+      setError('Cannot connect to server');
+    } finally {
+      setJoiningId(null);
+    }
+  };
+
+  const handleRefresh = async () => {
+    setRefreshing(true);
+    await onRefresh();
+    setRefreshing(false);
+  };
+
+  return (
+    <View style={{ flex: 1, backgroundColor: C.bg }}>
+      <View style={listStyles.header}>
+        <View style={{ flex: 1 }}>
+          <Text style={listStyles.title}>Factions</Text>
+          <Text style={listStyles.subtitle}>Join a faction to compete for territory</Text>
+        </View>
+        <TouchableOpacity style={listStyles.createBtn} onPress={onCreatePress} activeOpacity={0.8}>
+          <Text style={listStyles.createBtnText}>+ Create</Text>
+        </TouchableOpacity>
+      </View>
+
+      {error && (
+        <View style={listStyles.errorBanner}>
+          <Text style={listStyles.errorBannerText}>{error}</Text>
+        </View>
+      )}
+
+      <ScrollView
+        style={{ flex: 1 }}
+        contentContainerStyle={listStyles.list}
+        refreshControl={
+          <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor={C.primary} />
+        }
+      >
+        {factions.length === 0 ? (
+          <View style={styles.emptyState}>
+            <Text style={styles.emptyEmoji}>⚔️</Text>
+            <Text style={styles.emptyText}>No factions yet. Be the first to create one!</Text>
+            <TouchableOpacity
+              style={[styles.primaryButton, { marginTop: 16, paddingHorizontal: 24 }]}
+              onPress={onCreatePress}
+              activeOpacity={0.85}
+            >
+              <Text style={styles.primaryButtonText}>CREATE FACTION</Text>
+            </TouchableOpacity>
+          </View>
+        ) : (
+          factions.map(faction => {
+            const isMine = authUser?.factionId === faction.id;
+            return (
+              <View key={faction.id} style={[listStyles.card, { borderLeftColor: faction.color }]}>
+                <View style={[listStyles.cardIcon, { backgroundColor: faction.color }]}>
+                  <Text style={{ fontSize: 20 }}>{faction.icon}</Text>
+                </View>
+
+                <View style={{ flex: 1, minWidth: 0 }}>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+                    <Text style={listStyles.cardName} numberOfLines={1}>{faction.name}</Text>
+                    {isMine && (
+                      <View style={[listStyles.mineBadge, { backgroundColor: faction.color }]}>
+                        <Text style={listStyles.mineBadgeText}>YOURS</Text>
+                      </View>
+                    )}
+                  </View>
+                  {faction.description ? (
+                    <Text style={listStyles.cardDesc} numberOfLines={2}>{faction.description}</Text>
+                  ) : null}
+                  <View style={{ flexDirection: 'row', gap: 10, marginTop: 4 }}>
+                    <Text style={listStyles.cardMeta}>{faction.memberCount} member{faction.memberCount !== 1 ? 's' : ''}</Text>
+                    <Text style={listStyles.cardMeta}>{faction.totalPoints.toLocaleString()} pts</Text>
+                  </View>
+                </View>
+
+                <View style={{ flexShrink: 0, alignItems: 'center', justifyContent: 'center' }}>
+                  {isMine ? (
+                    <TouchableOpacity style={listStyles.chatBtn} onPress={onOpenChat} activeOpacity={0.8}>
+                      <Text style={listStyles.chatBtnText}>Chat</Text>
+                    </TouchableOpacity>
+                  ) : (
+                    <TouchableOpacity
+                      style={[listStyles.joinBtn, joiningId === faction.id && { opacity: 0.5 }]}
+                      onPress={() => handleJoin(faction.id)}
+                      disabled={joiningId === faction.id}
+                      activeOpacity={0.8}
+                    >
+                      <Text style={listStyles.joinBtnText}>
+                        {joiningId === faction.id ? '…' : authUser ? 'Join' : 'Login'}
+                      </Text>
+                    </TouchableOpacity>
+                  )}
+                </View>
+              </View>
+            );
+          })
+        )}
+      </ScrollView>
+    </View>
+  );
+};
+
+const listStyles = StyleSheet.create({
+  header: {
+    flexDirection:    'row',
+    alignItems:       'center',
+    paddingHorizontal: 16,
+    paddingVertical:  16,
+    backgroundColor:  C.card,
+    borderBottomWidth: 1,
+    borderBottomColor: C.border,
+    borderTopWidth:   2,
+    borderTopColor:   C.primary,
+    gap:              12,
+  },
+  title: {
+    fontSize:   18,
+    fontWeight: '800',
+    color:      C.textMain,
+    letterSpacing: 0.5,
+  },
+  subtitle: {
+    fontSize:  12,
+    color:     C.textMuted,
+    marginTop: 2,
+  },
+  createBtn: {
+    backgroundColor: C.primary,
+    borderRadius:    6,
+    paddingHorizontal: 14,
+    paddingVertical: 9,
+  },
+  createBtnText: {
+    color:      C.bg,
+    fontWeight: '700',
+    fontSize:   13,
+  },
+  errorBanner: {
+    backgroundColor: 'rgba(248,113,113,0.1)',
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(248,113,113,0.3)',
+    padding: 12,
+  },
+  errorBannerText: {
+    color: C.error, fontSize: 13, textAlign: 'center',
+  },
+  list: {
+    padding: 12,
+    gap:     10,
+  },
+  card: {
+    flexDirection:   'row',
+    alignItems:      'center',
+    gap:             12,
+    backgroundColor: C.card,
+    borderWidth:     1,
+    borderColor:     C.border,
+    borderLeftWidth: 4,
+    borderRadius:    8,
+    padding:         14,
+  },
+  cardIcon: {
+    width:          44,
+    height:         44,
+    borderRadius:   8,
+    alignItems:     'center',
+    justifyContent: 'center',
+    flexShrink:     0,
+  },
+  cardName: {
+    fontSize:   15,
+    fontWeight: '700',
+    color:      C.textMain,
+    flex:       1,
+  },
+  mineBadge: {
+    borderRadius:     4,
+    paddingHorizontal: 6,
+    paddingVertical:  2,
+  },
+  mineBadgeText: {
+    fontSize:  9,
+    fontWeight: '800',
+    color:     '#000',
+    letterSpacing: 0.5,
+  },
+  cardDesc: {
+    fontSize:   12,
+    color:      C.textMuted,
+    marginTop:  3,
+    lineHeight: 17,
+  },
+  cardMeta: {
+    fontSize: 11,
+    color:    C.textMuted,
+  },
+  joinBtn: {
+    borderWidth:     1,
+    borderColor:     C.primary,
+    borderRadius:    6,
+    paddingHorizontal: 14,
+    paddingVertical: 7,
+  },
+  joinBtnText: {
+    color:      C.primary,
+    fontWeight: '700',
+    fontSize:   13,
+  },
+  chatBtn: {
+    backgroundColor: C.primary,
+    borderRadius:    6,
+    paddingHorizontal: 14,
+    paddingVertical: 7,
+  },
+  chatBtnText: {
+    color:      C.bg,
+    fontWeight: '700',
+    fontSize:   13,
+  },
+});
+
+// ─── CreateFactionScreen ──────────────────────────────────────────────────────
+
+const CreateFactionScreen = ({
+  authUser, onBack, onCreated,
+}: {
+  authUser: AuthUser | null;
+  onBack: () => void;
+  onCreated: (updatedUser: AuthUser) => void;
+}) => {
+  const [name,        setName]        = useState('');
+  const [color,       setColor]       = useState('#3b82f6');
+  const [icon,        setIcon]        = useState('⚔️');
+  const [description, setDescription] = useState('');
+  const [loading,     setLoading]     = useState(false);
+  const [error,       setError]       = useState<string | null>(null);
+
+  const handleSubmit = async () => {
+    if (!name.trim()) { setError('Faction name is required'); return; }
+    setError(null);
+    setLoading(true);
+    try {
+      const res = await fetch(`${API_BASE_URL}/factions`, {
+        method:  'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body:    JSON.stringify({
+          name:        name.trim(),
+          color,
+          icon,
+          description: description.trim() || null,
+          createdBy:   authUser!.id,
+        }),
+      });
+      if (res.ok) {
+        const data = await res.json();
+        onCreated({ ...authUser!, factionId: data.id });
+      } else {
+        const data = await res.json().catch(() => null);
+        setError(data?.details || data?.error || 'Failed to create faction');
+      }
+    } catch {
+      setError('Cannot connect to server');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  if (!authUser) {
+    return (
+      <View style={{ flex: 1, backgroundColor: C.bg }}>
+        <BackHeader onBack={onBack} title="Create Faction" />
+        <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', gap: 12, padding: 24 }}>
+          <Text style={{ fontSize: 40 }}>🏰</Text>
+          <Text style={styles.screenTitle}>Login Required</Text>
+          <Text style={styles.screenSubtitle}>You must be logged in to create a faction.</Text>
+        </View>
+      </View>
+    );
+  }
+
+  return (
+    <View style={{ flex: 1, backgroundColor: C.bg }}>
+      <BackHeader onBack={onBack} title="Create Faction" />
+      <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={{ flex: 1 }}>
+        <ScrollView contentContainerStyle={createStyles.scroll} keyboardShouldPersistTaps="handled">
+
+          {/* Name */}
+          <View style={styles.inputGroup}>
+            <Text style={styles.label}>FACTION NAME</Text>
+            <TextInput
+              style={styles.input}
+              placeholder="Enter faction name"
+              placeholderTextColor={C.textMuted}
+              value={name}
+              onChangeText={setName}
+              maxLength={40}
+            />
+          </View>
+
+          {/* Icon picker */}
+          <View>
+            <Text style={[styles.label, { marginBottom: 10 }]}>FACTION ICON</Text>
+            <View style={createStyles.emojiGrid}>
+              {EMOJI_OPTIONS.map(emoji => (
+                <TouchableOpacity
+                  key={emoji}
+                  style={[
+                    createStyles.emojiBtn,
+                    icon === emoji && { borderColor: color, backgroundColor: color + '22' },
+                  ]}
+                  onPress={() => setIcon(emoji)}
+                  activeOpacity={0.7}
+                >
+                  <Text style={{ fontSize: 22 }}>{emoji}</Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+          </View>
+
+          {/* Color picker */}
+          <View>
+            <Text style={[styles.label, { marginBottom: 10 }]}>FACTION COLOR</Text>
+            <View style={createStyles.colorRow}>
+              {PRESET_COLORS.map(c => (
+                <TouchableOpacity
+                  key={c}
+                  style={[
+                    createStyles.colorBtn,
+                    { backgroundColor: c },
+                    color === c && { borderWidth: 2.5, borderColor: '#fff' },
+                  ]}
+                  onPress={() => setColor(c)}
+                  activeOpacity={0.75}
+                />
+              ))}
+            </View>
+          </View>
+
+          {/* Description */}
+          <View style={styles.inputGroup}>
+            <Text style={styles.label}>DESCRIPTION (OPTIONAL)</Text>
+            <TextInput
+              style={[styles.input, { minHeight: 80, textAlignVertical: 'top', paddingTop: 12 }]}
+              placeholder="What is your faction about?"
+              placeholderTextColor={C.textMuted}
+              value={description}
+              onChangeText={setDescription}
+              multiline
+              maxLength={280}
+            />
+          </View>
+
+          {/* Live preview */}
+          <View style={[createStyles.preview, { borderLeftColor: color }]}>
+            <View style={[createStyles.previewIcon, { backgroundColor: color }]}>
+              <Text style={{ fontSize: 22 }}>{icon}</Text>
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={createStyles.previewName}>{name || 'Faction Name'}</Text>
+              {description ? (
+                <Text style={createStyles.previewDesc} numberOfLines={2}>{description}</Text>
+              ) : null}
+            </View>
+          </View>
+
+          {error && (
+            <View style={styles.errorBox}>
+              <Text style={styles.errorText}>{error}</Text>
+            </View>
+          )}
+
+          <TouchableOpacity
+            style={[styles.primaryButton, loading && { opacity: 0.6 }]}
+            onPress={handleSubmit}
+            disabled={loading}
+            activeOpacity={0.85}
+          >
+            {loading
+              ? <ActivityIndicator color={C.bg} />
+              : <Text style={styles.primaryButtonText}>CREATE FACTION</Text>}
+          </TouchableOpacity>
+
+        </ScrollView>
+      </KeyboardAvoidingView>
+    </View>
+  );
+};
+
+const createStyles = StyleSheet.create({
+  scroll: {
+    padding: 16,
+    gap:     20,
+  },
+  emojiGrid: {
+    flexDirection: 'row',
+    flexWrap:      'wrap',
+    gap:           6,
+    backgroundColor: C.card,
+    borderWidth:   1,
+    borderColor:   C.border,
+    borderRadius:  8,
+    padding:       10,
+  },
+  emojiBtn: {
+    width:          40,
+    height:         40,
+    borderRadius:   6,
+    borderWidth:    2,
+    borderColor:    'transparent',
+    alignItems:     'center',
+    justifyContent: 'center',
+  },
+  colorRow: {
+    flexDirection: 'row',
+    gap:           10,
+    flexWrap:      'wrap',
+  },
+  colorBtn: {
+    width:        34,
+    height:       34,
+    borderRadius: 6,
+    borderWidth:  2,
+    borderColor:  'transparent',
+  },
+  preview: {
+    flexDirection:   'row',
+    alignItems:      'center',
+    gap:             12,
+    backgroundColor: C.card,
+    borderWidth:     1,
+    borderColor:     C.border,
+    borderLeftWidth: 4,
+    borderRadius:    8,
+    padding:         14,
+  },
+  previewIcon: {
+    width:          42,
+    height:         42,
+    borderRadius:   8,
+    alignItems:     'center',
+    justifyContent: 'center',
+    flexShrink:     0,
+  },
+  previewName: {
+    fontSize:   15,
+    fontWeight: '700',
+    color:      C.textMain,
+  },
+  previewDesc: {
+    fontSize:   12,
+    color:      C.textMuted,
+    marginTop:  3,
+    lineHeight: 17,
+  },
+});
+
+// ─── FactionScreen (chat) ─────────────────────────────────────────────────────
 
 interface ChatMessage {
   id: number;
@@ -529,17 +1229,19 @@ interface FactionMember {
   level: number;
 }
 
-const FactionScreen = ({ user }: { user: AuthUser }) => {
-  const [messages,  setMessages]  = useState<ChatMessage[]>([]);
-  const [members,   setMembers]   = useState<FactionMember[]>([]);
-  const [text,      setText]      = useState('');
-  const [sending,   setSending]   = useState(false);
-  const [showPicker, setShowPicker] = useState(false);
-  const [venues,    setVenues]    = useState<string[]>([]);
+const FactionScreen = ({ user, factions }: { user: AuthUser; factions: FactionInfo[] }) => {
+  const [messages,    setMessages]    = useState<ChatMessage[]>([]);
+  const [members,     setMembers]     = useState<FactionMember[]>([]);
+  const [text,        setText]        = useState('');
+  const [sending,     setSending]     = useState(false);
+  const [showPicker,  setShowPicker]  = useState(false);
+  const [venues,      setVenues]      = useState<string[]>([]);
   const [venueSearch, setVenueSearch] = useState('');
   const scrollRef = React.useRef<ScrollView>(null);
 
-  const faction = FACTIONS.find(f => f.id === user.factionId);
+  const faction = factions.find(f => f.id === user.factionId);
+  const factionColor = faction?.color ?? C.primary;
+  const factionName  = faction?.name  ?? 'Faction';
 
   useEffect(() => {
     fetchMessages();
@@ -580,9 +1282,9 @@ const FactionScreen = ({ user }: { user: AuthUser }) => {
     setSending(true);
     try {
       await fetch(`${API_BASE_URL}/factions/${user.factionId}/messages`, {
-        method: 'POST',
+        method:  'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ userId: user.id, content: content.trim(), type }),
+        body:    JSON.stringify({ userId: user.id, content: content.trim(), type }),
       });
       await fetchMessages();
       setTimeout(() => scrollRef.current?.scrollToEnd({ animated: true }), 100);
@@ -591,29 +1293,27 @@ const FactionScreen = ({ user }: { user: AuthUser }) => {
     }
   };
 
-  const filteredVenues = venues.filter(v =>
-    v.toLowerCase().includes(venueSearch.toLowerCase())
-  ).slice(0, 25);
+  const filteredVenues = venues
+    .filter(v => v.toLowerCase().includes(venueSearch.toLowerCase()))
+    .slice(0, 25);
 
   return (
     <View style={{ flex: 1, backgroundColor: C.bg }}>
-      {/* Header */}
-      <View style={[factionStyles.header, { borderTopColor: faction?.color ?? C.primary }]}>
+      <View style={[factionStyles.header, { borderTopColor: factionColor }]}>
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
-          <View style={{ width: 8, height: 8, borderRadius: 2, backgroundColor: faction?.color ?? C.primary }} />
-          <Text style={factionStyles.headerName}>{faction?.name ?? 'Faction'}</Text>
+          <View style={{ width: 8, height: 8, borderRadius: 2, backgroundColor: factionColor }} />
+          <Text style={factionStyles.headerName}>{factionName}</Text>
           <View style={factionStyles.memberBadge}>
             <Text style={factionStyles.memberBadgeText}>{members.length} members</Text>
           </View>
         </View>
       </View>
 
-      {/* Members row */}
       {members.length > 0 && (
         <ScrollView horizontal showsHorizontalScrollIndicator={false} style={factionStyles.membersRow} contentContainerStyle={{ padding: 10, gap: 8 }}>
           {members.map(m => (
             <View key={m.id} style={factionStyles.memberChip}>
-              <View style={[factionStyles.memberAvatar, { borderColor: faction?.color ?? C.primary }]}>
+              <View style={[factionStyles.memberAvatar, { borderColor: factionColor }]}>
                 {m.profilePicture
                   ? <Image source={{ uri: m.profilePicture }} style={{ width: '100%', height: '100%' }} />
                   : <Text style={factionStyles.memberInitial}>{m.username.charAt(0).toUpperCase()}</Text>
@@ -625,8 +1325,12 @@ const FactionScreen = ({ user }: { user: AuthUser }) => {
         </ScrollView>
       )}
 
-      {/* Messages */}
-      <ScrollView ref={scrollRef} style={{ flex: 1 }} contentContainerStyle={factionStyles.messagesList} onContentSizeChange={() => scrollRef.current?.scrollToEnd({ animated: false })}>
+      <ScrollView
+        ref={scrollRef}
+        style={{ flex: 1 }}
+        contentContainerStyle={factionStyles.messagesList}
+        onContentSizeChange={() => scrollRef.current?.scrollToEnd({ animated: false })}
+      >
         {messages.length === 0 && (
           <View style={styles.emptyState}>
             <Text style={styles.emptyEmoji}>⚔️</Text>
@@ -645,7 +1349,7 @@ const FactionScreen = ({ user }: { user: AuthUser }) => {
               </View>
               <View style={{ flex: 1 }}>
                 <View style={factionStyles.msgMeta}>
-                  <Text style={[factionStyles.msgAuthor, isOwn && { color: faction?.color ?? C.primary }]}>{msg.user.username}</Text>
+                  <Text style={[factionStyles.msgAuthor, isOwn && { color: factionColor }]}>{msg.user.username}</Text>
                   <Text style={factionStyles.msgTime}>
                     {new Date(msg.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                   </Text>
@@ -667,7 +1371,6 @@ const FactionScreen = ({ user }: { user: AuthUser }) => {
         })}
       </ScrollView>
 
-      {/* Venue picker */}
       {showPicker && (
         <View style={factionStyles.venuePicker}>
           <View style={factionStyles.venuePickerHeader}>
@@ -698,7 +1401,6 @@ const FactionScreen = ({ user }: { user: AuthUser }) => {
         </View>
       )}
 
-      {/* Input bar */}
       <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
         <View style={factionStyles.inputBar}>
           <TouchableOpacity style={factionStyles.shareBtn} onPress={() => setShowPicker(v => !v)}>
@@ -713,11 +1415,11 @@ const FactionScreen = ({ user }: { user: AuthUser }) => {
             multiline
           />
           <TouchableOpacity
-            style={[factionStyles.sendBtn, { borderColor: faction?.color ?? C.primary }, (!text.trim() || sending) && { opacity: 0.35 }]}
+            style={[factionStyles.sendBtn, { borderColor: factionColor }, (!text.trim() || sending) && { opacity: 0.35 }]}
             onPress={() => { sendMessage(text); setText(''); }}
             disabled={!text.trim() || sending}
           >
-            <Text style={[factionStyles.sendBtnText, { color: faction?.color ?? C.primary }]}>▶</Text>
+            <Text style={[factionStyles.sendBtnText, { color: factionColor }]}>▶</Text>
           </TouchableOpacity>
         </View>
       </KeyboardAvoidingView>
@@ -928,7 +1630,6 @@ const ProfileScreen = ({ user, onLogout }: { user: AuthUser; onLogout: () => voi
   return (
     <ScrollView style={styles.profileScroll} contentContainerStyle={styles.profileScrollContent}>
 
-      {/* Avatar */}
       <View style={styles.profileHeader}>
         <View style={[styles.profileAvatar, { borderColor: profile.factionColor }]}>
           {profile.profilePicture
@@ -947,7 +1648,6 @@ const ProfileScreen = ({ user, onLogout }: { user: AuthUser; onLogout: () => voi
         </View>
       </View>
 
-      {/* Stats */}
       <View style={styles.statsRow}>
         <View style={styles.statCell}>
           <Text style={styles.statValue}>Lv.{profile.level}</Text>
@@ -965,7 +1665,6 @@ const ProfileScreen = ({ user, onLogout }: { user: AuthUser; onLogout: () => voi
         </View>
       </View>
 
-      {/* Streak banner */}
       <View style={styles.streakBanner}>
         <Text style={styles.streakEmoji}>🔥</Text>
         <View style={{ flex: 1 }}>
@@ -980,7 +1679,6 @@ const ProfileScreen = ({ user, onLogout }: { user: AuthUser; onLogout: () => voi
         </View>
       </View>
 
-      {/* Recent reviews */}
       <Text style={styles.sectionTitle}>Recent Reviews</Text>
 
       {profile.recentReviews.length === 0 ? (
@@ -1017,15 +1715,16 @@ const ProfileScreen = ({ user, onLogout }: { user: AuthUser; onLogout: () => voi
 
 // ─── Root App ─────────────────────────────────────────────────────────────────
 
-export default function App() {
-  const [activeTab,     setActiveTab]     = useState('map');
+function App() {
+  const [activeTab,     setActiveTab]     = useState<Tab>('map');
+  const [subScreen,     setSubScreen]     = useState<SubScreen>(null);
   const [authMode,      setAuthMode]      = useState<AuthMode>('login');
   const [venues,        setVenues]        = useState<any[]>([]);
   const [authUser,      setAuthUser]      = useState<AuthUser | null>(null);
   const [userLocation,  setUserLocation]  = useState<UserLocation | null>(null);
   const [selectedVenue, setSelectedVenue] = useState<SelectedVenue | null>(null);
+  const [factions,      setFactions]      = useState<FactionInfo[]>([]);
 
-  // Request location permission and watch position
   useEffect(() => {
     let sub: Location.LocationSubscription | null = null;
     (async () => {
@@ -1042,8 +1741,16 @@ export default function App() {
   }, []);
 
   useEffect(() => {
+    fetchFactions();
     if (activeTab === 'map') fetchVenues();
   }, [activeTab]);
+
+  const fetchFactions = useCallback(async () => {
+    try {
+      const res = await fetch(`${API_BASE_URL}/factions`);
+      if (res.ok) setFactions(await res.json());
+    } catch { /* silent */ }
+  }, []);
 
   const fetchVenues = async () => {
     try {
@@ -1055,6 +1762,41 @@ export default function App() {
       console.warn('Failed to fetch venues. Make sure the server is running.', error);
     }
   };
+
+  const tabs: { key: Tab; icon: string; label: string }[] = [
+    { key: 'map',      icon: '📍', label: 'Map'      },
+    { key: 'hex',      icon: '🔷',  label: 'Hex'      },
+    { key: 'factions', icon: '⚔️', label: 'Factions' },
+    { key: 'profile',  icon: '👤', label: 'Profile'  },
+  ];
+
+  // Sub-screens render full-screen, hiding tabs
+  if (subScreen === 'createFaction') {
+    return (
+      <SafeAreaView style={styles.safeArea}>
+        <StatusBar style="light" />
+        <CreateFactionScreen
+          authUser={authUser}
+          onBack={() => setSubScreen(null)}
+          onCreated={(updatedUser) => {
+            setAuthUser(updatedUser);
+            setSubScreen(null);
+            fetchFactions();
+          }}
+        />
+      </SafeAreaView>
+    );
+  }
+
+  if (subScreen === 'factionChat' && authUser) {
+    return (
+      <SafeAreaView style={styles.safeArea}>
+        <StatusBar style="light" />
+        <BackHeader onBack={() => setSubScreen(null)} title="Faction Chat" />
+        <FactionScreen user={authUser} factions={factions} />
+      </SafeAreaView>
+    );
+  }
 
   return (
     <SafeAreaView style={styles.safeArea}>
@@ -1077,7 +1819,6 @@ export default function App() {
                 strokeColor="rgba(232, 160, 0, 0.35)"
                 strokeWidth={1}
               />
-              {/* User location dot */}
               {userLocation && (
                 <Circle
                   center={{ latitude: userLocation.lat, longitude: userLocation.lon }}
@@ -1087,7 +1828,6 @@ export default function App() {
                   strokeWidth={2}
                 />
               )}
-              {/* User proximity ring */}
               {userLocation && (
                 <Circle
                   center={{ latitude: userLocation.lat, longitude: userLocation.lon }}
@@ -1119,7 +1859,6 @@ export default function App() {
               <Text style={styles.overlayText}>Kadıköy District</Text>
             </View>
 
-            {/* Review sheet */}
             {selectedVenue && (
               <VenueReviewSheet
                 venue={selectedVenue}
@@ -1132,29 +1871,28 @@ export default function App() {
           </View>
         )}
 
-        {activeTab === 'hex' && <HexGrid />}
+        {activeTab === 'hex' && <RealHexGrid factions={factions} />}
 
-        {activeTab === 'faction' && (
-          authUser
-            ? <FactionScreen user={authUser} />
-            : <AuthScreen mode={authMode} setMode={setAuthMode} onLoginSuccess={setAuthUser} />
+        {activeTab === 'factions' && (
+          <FactionListScreen
+            factions={factions}
+            authUser={authUser}
+            onJoin={(updatedUser) => setAuthUser(updatedUser)}
+            onCreatePress={() => setSubScreen('createFaction')}
+            onOpenChat={() => setSubScreen('factionChat')}
+            onRefresh={fetchFactions}
+          />
         )}
 
         {activeTab === 'profile' && (
           authUser
             ? <ProfileScreen user={authUser} onLogout={() => setAuthUser(null)} />
-            : <AuthScreen mode={authMode} setMode={setAuthMode} onLoginSuccess={setAuthUser} />
+            : <AuthScreen mode={authMode} setMode={setAuthMode} onLoginSuccess={setAuthUser} factions={factions} />
         )}
       </View>
 
-      {/* Tab Bar */}
       <View style={styles.tabBar}>
-        {[
-          { key: 'map',     icon: '📍', label: 'Map'     },
-          { key: 'hex',     icon: '⬡',  label: 'Hex'     },
-          { key: 'faction', icon: '⚔️', label: 'Faction' },
-          { key: 'profile', icon: '👤', label: 'Profile' },
-        ].map(tab => (
+        {tabs.map(tab => (
           <TouchableOpacity
             key={tab.key}
             style={styles.tabItem}
@@ -1172,6 +1910,14 @@ export default function App() {
         ))}
       </View>
     </SafeAreaView>
+  );
+}
+
+export default function Root() {
+  return (
+    <SafeAreaProvider>
+      <App />
+    </SafeAreaProvider>
   );
 }
 
@@ -1199,7 +1945,7 @@ const styles = StyleSheet.create({
   safeArea: { flex: 1, backgroundColor: C.bg },
   flex1:    { flex: 1 },
   main:     { flex: 1, backgroundColor: C.bg },
-  map:      { width: '100%', height: '100%' },
+  map:      { flex: 1 },
 
   // Map overlay
   mapOverlay: {
@@ -1222,7 +1968,7 @@ const styles = StyleSheet.create({
     letterSpacing: 0.5,
   },
 
-  // Hex screen
+  // Hex / generic screen
   screenContainer: {
     alignItems: 'center',
     padding:    24,
@@ -1236,44 +1982,13 @@ const styles = StyleSheet.create({
     marginBottom:  6,
     fontFamily:    SERIF,
     letterSpacing: 0.5,
+    textAlign:     'center',
   },
   screenSubtitle: {
     fontSize:     14,
     color:        C.textMuted,
     textAlign:    'center',
     marginBottom: 28,
-  },
-  hexContainer: {
-    backgroundColor: C.card,
-    borderRadius:    8,
-    padding:         12,
-    borderWidth:     1,
-    borderColor:     C.border,
-    borderTopWidth:  2,
-    borderTopColor:  C.primary,
-  },
-  legend: {
-    flexDirection: 'row',
-    marginTop:     28,
-    flexWrap:      'wrap',
-    justifyContent: 'center',
-    gap:            4,
-  },
-  legendItem: {
-    flexDirection:   'row',
-    alignItems:      'center',
-    marginHorizontal: 10,
-    marginVertical:   6,
-  },
-  colorBox: {
-    width:        14,
-    height:       14,
-    borderRadius: 3,
-    marginRight:  8,
-  },
-  legendText: {
-    color:    C.textMuted,
-    fontSize: 13,
   },
 
   // Auth
@@ -1316,18 +2031,14 @@ const styles = StyleSheet.create({
     paddingVertical: 14,
     alignItems:      'center',
   },
-  modeTabActive: {
-    backgroundColor: C.primary,
-  },
+  modeTabActive:     { backgroundColor: C.primary },
   modeTabText: {
     color:         C.textMuted,
     fontSize:      12,
     fontWeight:    '700',
     letterSpacing: 2,
   },
-  modeTabTextActive: {
-    color: C.bg,
-  },
+  modeTabTextActive: { color: C.bg },
 
   // Auth card
   authCard: {
@@ -1361,7 +2072,7 @@ const styles = StyleSheet.create({
     minHeight:       52,
   },
 
-  // Faction picker
+  // Faction picker (register)
   factionRow: { gap: 10 },
   factionBtn: {
     flexDirection:    'row',

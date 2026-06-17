@@ -6,6 +6,7 @@ import axios from 'axios';
 import { PrismaClient } from '@prisma/client';
 import { PrismaPg } from '@prisma/adapter-pg';
 import { parseCafeGeoJson } from './parser';
+import * as h3 from 'h3-js';
 
 // In-memory cache for on-demand venue enrichment
 const enrichmentCache = new Map<string, Record<string, any>>();
@@ -201,6 +202,85 @@ app.post('/territory/ownership', async (req: Request, res: Response) => {
   } catch (error) {
     console.error('Error calculating territory ownership:', error);
     res.status(500).json({ error: 'Failed to calculate territory ownership' });
+  }
+});
+
+// Mobile hex grid: client sends viewport bounds, server computes cells + ownership + boundaries.
+// Removes the need for h3-js in the React Native / Hermes environment.
+app.post('/territory/hexgrid', async (req: Request, res: Response) => {
+  const { north, south, east, west, resolution = 9 } = req.body;
+  if (north == null || south == null || east == null || west == null) {
+    return res.status(400).json({ error: 'north, south, east, west required' });
+  }
+
+  const res9 = Math.min(Math.max(Number(resolution), 7), 11);
+  const polygon: [number, number][] = [
+    [north, west], [north, east],
+    [south, east], [south, west],
+    [north, west],
+  ];
+
+  let hexIds: string[];
+  try {
+    hexIds = h3.polygonToCells(polygon, res9);
+  } catch {
+    return res.status(400).json({ error: 'Invalid bounds' });
+  }
+
+  if (hexIds.length > 800) {
+    return res.status(400).json({ error: 'Viewport too large — zoom in', tooLarge: true });
+  }
+
+  try {
+    const venues = await prisma.venue.findMany({
+      where: { h3Index: { in: hexIds } },
+      select: {
+        h3Index: true,
+        reviews: { select: { rating: true, user: { select: { factionId: true } } } },
+      },
+    });
+
+    const hexScores: Record<string, Record<number, number>> = {};
+    for (const venue of venues) {
+      if (!hexScores[venue.h3Index]) hexScores[venue.h3Index] = {};
+      for (const review of venue.reviews) {
+        const factionId = review.user.factionId;
+        if (factionId === null) continue;
+        hexScores[venue.h3Index][factionId] = (hexScores[venue.h3Index][factionId] ?? 0) + review.rating;
+      }
+    }
+
+    const ownershipMap: Record<string, number | null> = {};
+    for (const [h3Index, scores] of Object.entries(hexScores)) {
+      let winner: number | null = null;
+      let best = -1;
+      for (const [idStr, score] of Object.entries(scores)) {
+        if (score > best) { best = score; winner = parseInt(idStr, 10); }
+      }
+      ownershipMap[h3Index] = winner;
+    }
+
+    const result = hexIds.map(h3Index => {
+      const boundary = h3.cellToBoundary(h3Index);
+      return {
+        h3Index,
+        factionId: ownershipMap[h3Index] ?? null,
+        boundary: boundary.map(([lat, lng]) => ({ latitude: lat, longitude: lng })),
+      };
+    });
+
+    res.json(result);
+  } catch {
+    // DB unavailable — return all hexes as unclaimed so the grid still renders
+    const result = hexIds.map(h3Index => {
+      const boundary = h3.cellToBoundary(h3Index);
+      return {
+        h3Index,
+        factionId: null,
+        boundary: boundary.map(([lat, lng]) => ({ latitude: lat, longitude: lng })),
+      };
+    });
+    res.json(result);
   }
 });
 
