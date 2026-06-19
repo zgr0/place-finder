@@ -34,8 +34,13 @@ services:
     environment:
       DATABASE_URL: "postgresql://user:qwe123asd@db:5432/placefinder_db?schema=public"
       REDIS_URL: "redis://redis:6379"
+      INFERENCE_URL: "http://host.docker.internal:8000"
+      GEMINI_API_KEY: "${GEMINI_API_KEY}"
     ports:
       - "3000:3000"
+    dns:
+      - 8.8.8.8
+      - 8.8.4.4
 
   
 

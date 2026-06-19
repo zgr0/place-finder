@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useLanguage } from './LanguageContext';
 
 const API_BASE = 'http://localhost:3000';
 
@@ -15,6 +16,7 @@ const Register = () => {
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
+  const { t } = useLanguage();
 
   useEffect(() => {
     fetch(`${API_BASE}/factions`)
@@ -65,39 +67,39 @@ const Register = () => {
   return (
     <div className="auth-page">
       <div className="auth-card">
-        <h1 className="auth-title">Join Venue Finder</h1>
+        <h1 className="auth-title">{t.joinVenueFinder}</h1>
         <form onSubmit={handleRegister} className="flex flex-col gap-4">
           <input
             className="form-field"
-            placeholder="Email"
+            placeholder={t.email}
             type="email"
             value={form.email}
             onChange={e => setForm({ ...form, email: e.target.value })}
           />
           <input
             className="form-field"
-            placeholder="Username"
+            placeholder={t.username}
             value={form.username}
             onChange={e => setForm({ ...form, username: e.target.value })}
           />
           <input
             className="form-field"
             type="password"
-            placeholder="Password"
+            placeholder={t.password}
             value={form.password}
             onChange={e => setForm({ ...form, password: e.target.value })}
           />
 
           <div>
             <label className="text-sm text-slate-400" style={{ display: 'block', marginBottom: '0.4rem' }}>
-              Faction (optional — you can join later)
+              {t.factionOptional}
             </label>
             <select
               className="form-field"
               value={form.factionId}
               onChange={e => setForm({ ...form, factionId: Number(e.target.value) })}
             >
-              <option value={0}>No faction (join later)</option>
+              <option value={0}>{t.noFaction}</option>
               {factions.map(f => (
                 <option key={f.id} value={f.id}>
                   {f.name} ({f.memberCount} member{f.memberCount !== 1 ? 's' : ''})
@@ -111,11 +113,11 @@ const Register = () => {
 
           <button className="button-primary" disabled={isLoading}>
             {isLoading ? <span className="loader" style={{ width: '18px', height: '18px', borderWidth: '2px' }} /> : null}
-            {isLoading ? 'Registering...' : 'Initialize Account'}
+            {isLoading ? t.registering : t.initializeAccount}
           </button>
         </form>
         <div className="mt-4 text-center text-sm text-slate-400">
-          Already have an account? <a href="/login" className="button-secondary">Sign In</a>
+          {t.alreadyHaveAccount} <a href="/login" className="button-secondary">{t.signIn}</a>
         </div>
       </div>
     </div>

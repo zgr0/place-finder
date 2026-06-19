@@ -3,11 +3,14 @@ import maplibregl from 'maplibre-gl';
 import 'maplibre-gl/dist/maplibre-gl.css';
 import './map.css';
 import ReviewModal from './Review';
+import MissionPanel from './MissionPanel';
+import { useLanguage } from './LanguageContext';
 
 declare global {
   interface Window {
     openReviewModal: (venueName: string) => void;
     loadVenueDetails: (name: string, lat: number, lng: number) => void;
+    generateVenueDescription: (name: string, amenity: string, cuisine: string, address: string, opening_hours: string) => void;
   }
 }
 
@@ -28,6 +31,18 @@ export default function Map() {
   const [selectedVenueForReview, setSelectedVenueForReview] = useState<string | null>(null);
   const [factionRanking, setFactionRanking] = useState<FactionRank[]>([]);
   const [showRanking, setShowRanking] = useState(false);
+  const { t } = useLanguage();
+
+  useEffect(() => {
+    (window as any).__popupStrings = {
+      loadingDetails: t.loadingDetails,
+      loadMissingInfo: t.loadMissingInfo,
+      generateDescription: t.generateDescription,
+      generating: t.generating,
+      viewAndWriteReviews: t.viewAndWriteReviews,
+      couldNotLoadVenues: t.couldNotLoadVenues,
+    };
+  }, [t]);
 
   useEffect(() => {
     fetch('http://localhost:3000/factions/ranking')
@@ -243,6 +258,15 @@ export default function Map() {
         let currentPopupCoords: [number, number] = [0, 0];
 
         function buildPopupHtml(props: Record<string, any>, loading = false): string {
+          const ps = (window as any).__popupStrings || {};
+          const str = {
+            loadingDetails: ps.loadingDetails || 'Loading details...',
+            loadMissingInfo: ps.loadMissingInfo || 'Load missing info',
+            generateDescription: ps.generateDescription || '✨ Generate Description',
+            generating: ps.generating || 'Generating...',
+            viewAndWriteReviews: ps.viewAndWriteReviews || 'View & Write Reviews',
+          };
+
           const type = props.cuisine
             ? `${props.amenity || 'Unknown'} • ${props.cuisine.replace(/_/g, ' ')}`
             : (props.amenity || 'Unknown Type');
@@ -276,17 +300,50 @@ export default function Map() {
 
           if (hasMissing) {
             if (loading) {
-              html += `<div style="font-size: 11px; color: #888; margin-top: 4px;">Loading details...</div>`;
+              html += `<div style="font-size: 11px; color: #888; margin-top: 4px;">${str.loadingDetails}</div>`;
             } else {
               const [lng, lat] = currentPopupCoords;
-              html += `<div style="margin-top: 4px;"><button onclick="window.loadVenueDetails('${venueName}',${lat},${lng})" style="background: none; border: 1px solid #ccc; border-radius: 4px; padding: 3px 8px; font-size: 11px; cursor: pointer; color: #555;">Load missing info</button></div>`;
+              html += `<div style="margin-top: 4px;"><button onclick="window.loadVenueDetails('${venueName}',${lat},${lng})" style="background: none; border: 1px solid #ccc; border-radius: 4px; padding: 3px 8px; font-size: 11px; cursor: pointer; color: #555;">${str.loadMissingInfo}</button></div>`;
             }
           }
 
-          html += `<div style="margin-top: 8px;"><button onclick="window.openReviewModal('${venueName}')" style="display: inline-block; background-color: #3b82f6; color: white; padding: 8px 16px; border: none; border-radius: 6px; cursor: pointer; font-weight: bold; width: 100%;">View & Write Reviews</button></div>`;
+          if (props._aiDesc) {
+            html += `<div style="font-size: 12px; color: #fff; margin-top: 4px; font-style: italic; border-left: 2px solid #a855f7; padding-left: 6px;">${props._aiDesc}</div>`;
+          } else {
+            const cuisine = (props.cuisine || '').replace(/'/g, "\\'");
+            const amenity = (props.amenity || '').replace(/'/g, "\\'");
+            const addrStreet = (props['addr:street'] || '').replace(/'/g, "\\'");
+            const hours = (props.opening_hours || '').replace(/'/g, "\\'");
+            html += `<div style="margin-top: 6px;"><button class="venue-ai-gen-btn" onclick="window.generateVenueDescription('${venueName}','${amenity}','${cuisine}','${addrStreet}','${hours}')" style="display: inline-block; background: none; border: 1px solid #a855f7; color: #a855f7; padding: 5px 12px; border-radius: 6px; cursor: pointer; font-size: 12px; width: 100%;">${str.generateDescription}</button></div>`;
+          }
+          html += `<div style="margin-top: 6px;"><button onclick="window.openReviewModal('${venueName}')" style="display: inline-block; background-color: #3b82f6; color: white; padding: 8px 16px; border: none; border-radius: 6px; cursor: pointer; font-weight: bold; width: 100%;">${str.viewAndWriteReviews}</button></div>`;
           html += `</div>`;
           return html;
         }
+
+        window.generateVenueDescription = async (name: string, amenity: string, cuisine: string, address: string, opening_hours: string) => {
+          const btn = document.querySelector<HTMLButtonElement>('.venue-ai-gen-btn');
+          const lang = (window as any).__appLang || 'en';
+          if (btn) { btn.textContent = lang === 'tr' ? 'Oluşturuluyor...' : 'Generating...'; btn.disabled = true; }
+          try {
+            const res = await fetch('http://localhost:3000/venues/describe', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ name, amenity, cuisine, address, opening_hours, lang }),
+            });
+            const data = await res.json();
+            if (data.description) {
+              currentPopupMerged._aiDesc = data.description;
+              hoverPopup.setHTML(buildPopupHtml(currentPopupMerged));
+            } else {
+              console.error('Describe error:', data.detail || data.error);
+              if (btn) { btn.textContent = '❌ ' + (data.detail || 'Error'); btn.disabled = false; }
+            }
+          } catch (err) {
+            console.error('Describe fetch error:', err);
+            if (btn) { btn.textContent = '✨ Generate Description'; btn.disabled = false; }
+          }
+        };
 
         window.loadVenueDetails = async (name: string, lat: number, lng: number) => {
           const key = `${name}|${lat.toFixed(4)}|${lng.toFixed(4)}`;
@@ -368,7 +425,7 @@ export default function Map() {
         });
       } catch (error) {
         console.error('Error fetching or adding venues:', error);
-        setVenueError('Could not load venues. Is the server running on port 3000?');
+        setVenueError(((window as any).__popupStrings?.couldNotLoadVenues) || 'Could not load venues. Is the server running on port 3000?');
       } finally {
         setIsLoadingMap(false);
       }
@@ -398,7 +455,7 @@ export default function Map() {
         }}
       >
         <div>
-          <h2>Map cannot be displayed</h2>
+          <h2>{t.mapCannotBeDisplayed}</h2>
           <p>{mapError}</p>
         </div>
       </div>
@@ -411,7 +468,7 @@ export default function Map() {
         {isLoadingMap && (
           <div className="map-loading-overlay">
             <div className="loader" style={{width: '32px', height: '32px'}}></div>
-            <div>Loading Map & Venues...</div>
+            <div>{t.loadingMapVenues}</div>
           </div>
         )}
         <div ref={mapContainer} className="map" />
@@ -426,6 +483,8 @@ export default function Map() {
           </div>
         )}
 
+        <MissionPanel />
+
         {/* Faction ranking widget */}
         <div className="map-ranking-widget">
           <button
@@ -437,9 +496,9 @@ export default function Map() {
           </button>
           {showRanking && (
             <div className="map-ranking-panel">
-              <div className="map-ranking-title">Faction Rankings</div>
+              <div className="map-ranking-title">{t.factionRankings}</div>
               {factionRanking.length === 0 ? (
-                <div style={{ color: 'var(--text-muted)', fontSize: '0.78rem', padding: '0.5rem 0' }}>No data yet</div>
+                <div style={{ color: 'var(--text-muted)', fontSize: '0.78rem', padding: '0.5rem 0' }}>{t.noDataYet}</div>
               ) : (
                 factionRanking.map((f, i) => (
                   <div key={f.id} className="map-ranking-row">

@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
+import { useLanguage } from './LanguageContext';
 
 const API_BASE = 'http://localhost:3000';
 
@@ -17,6 +18,7 @@ export default function CreateFaction() {
   const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const navigate = useNavigate();
+  const { t } = useLanguage();
 
   const userId = parseInt(localStorage.getItem('userId') || '0');
 
@@ -25,12 +27,12 @@ export default function CreateFaction() {
       <div className="auth-page">
         <div className="auth-card" style={{ textAlign: 'center' }}>
           <div style={{ fontSize: '2.5rem', marginBottom: '1rem' }}>🏰</div>
-          <h2 className="auth-title">Create Faction</h2>
+          <h2 className="auth-title">{t.createFaction}</h2>
           <p style={{ color: 'var(--text-muted)', marginBottom: '1.5rem', fontSize: '0.9rem' }}>
-            You must be logged in to create a faction.
+            {t.mustBeLoggedIn}
           </p>
           <div style={{ display: 'flex', gap: '0.75rem', justifyContent: 'center' }}>
-            <Link to="/login" className="button-primary" style={{ textDecoration: 'none' }}>Login</Link>
+            <Link to="/login" className="button-primary" style={{ textDecoration: 'none' }}>{t.login}</Link>
             <Link to="/factions" style={{ color: 'var(--text-muted)', fontSize: '0.875rem', alignSelf: 'center', textDecoration: 'none' }}>← Back</Link>
           </div>
         </div>
@@ -40,7 +42,7 @@ export default function CreateFaction() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!form.name.trim()) { setError('Faction name is required'); return; }
+    if (!form.name.trim()) { setError(t.factionNameRequired); return; }
     setError(null);
     setIsLoading(true);
     try {
@@ -79,15 +81,15 @@ export default function CreateFaction() {
       <div className="auth-card" style={{ maxWidth: '500px', width: '100%' }}>
         <div style={{ marginBottom: '0.75rem' }}>
           <Link to="/factions" style={{ color: 'var(--text-muted)', textDecoration: 'none', fontSize: '0.85rem' }}>
-            ← Factions
+            {t.backToFactions}
           </Link>
         </div>
-        <h1 className="auth-title">Create Faction</h1>
+        <h1 className="auth-title">{t.createFaction}</h1>
 
         <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
           <input
             className="form-field"
-            placeholder="Faction name"
+            placeholder={t.factionName}
             value={form.name}
             onChange={e => setForm({ ...form, name: e.target.value })}
             maxLength={40}
@@ -96,7 +98,7 @@ export default function CreateFaction() {
           {/* Icon picker */}
           <div>
             <label style={{ fontSize: '0.8rem', color: 'var(--text-muted)', display: 'block', marginBottom: '0.5rem' }}>
-              Faction icon
+              {t.factionIcon}
             </label>
             <div style={{
               display: 'grid',
@@ -133,7 +135,7 @@ export default function CreateFaction() {
           {/* Color picker */}
           <div>
             <label style={{ fontSize: '0.8rem', color: 'var(--text-muted)', display: 'block', marginBottom: '0.5rem' }}>
-              Faction color
+              {t.factionColor}
             </label>
             <div style={{ display: 'flex', gap: '0.75rem', alignItems: 'center', flexWrap: 'wrap' }}>
               <input
@@ -167,7 +169,7 @@ export default function CreateFaction() {
 
           <textarea
             className="form-field"
-            placeholder="Description (optional) — what is your faction about?"
+            placeholder={t.factionDescription}
             value={form.description}
             onChange={e => setForm({ ...form, description: e.target.value })}
             rows={3}
@@ -196,7 +198,7 @@ export default function CreateFaction() {
             </div>
             <div style={{ minWidth: 0 }}>
               <div style={{ color: 'var(--text-main)', fontWeight: 700, fontSize: '0.95rem' }}>
-                {form.name || 'Faction Name'}
+                {form.name || t.factionName}
               </div>
               {form.description && (
                 <div style={{ color: 'var(--text-muted)', fontSize: '0.78rem', marginTop: '0.15rem', lineHeight: 1.4 }}>
@@ -210,8 +212,8 @@ export default function CreateFaction() {
 
           <button className="button-primary" disabled={isLoading} style={{ marginTop: '0.25rem' }}>
             {isLoading
-              ? <><span className="loader" style={{ width: 18, height: 18, borderWidth: 2, display: 'inline-block', marginRight: 6 }} />Creating…</>
-              : 'Create Faction'}
+              ? <><span className="loader" style={{ width: 18, height: 18, borderWidth: 2, display: 'inline-block', marginRight: 6 }} />{t.creating}</>
+              : t.createFaction}
           </button>
         </form>
       </div>

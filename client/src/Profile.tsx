@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from 'react'
 import { Link } from 'react-router-dom'
+import { useLanguage } from './LanguageContext'
 
 const API_BASE = 'http://localhost:3000';
 
@@ -44,6 +45,7 @@ export default function Profile() {
   const [error, setError] = useState('');
   const [uploading, setUploading] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const { t } = useLanguage();
 
   const userId = localStorage.getItem('userId');
 
@@ -100,16 +102,16 @@ export default function Profile() {
       <div className="auth-page">
         <div className="auth-card" style={{ textAlign: 'center' }}>
           <div style={{ fontSize: '3rem', marginBottom: '1rem' }}>👤</div>
-          <h2 className="auth-title">Sign In to View Profile</h2>
+          <h2 className="auth-title">{t.signInToViewProfile}</h2>
           <p style={{ color: 'var(--text-muted)', marginBottom: '1.5rem', fontSize: '0.9rem' }}>
-            Log in to see your reviews, streak, and stats.
+            {t.signInToSeeStats}
           </p>
           <div style={{ display: 'flex', gap: '0.75rem', justifyContent: 'center' }}>
             <Link to="/login" className="button-primary" style={{ textDecoration: 'none', padding: '0.75rem 1.5rem' }}>
-              Login
+              {t.login}
             </Link>
             <Link to="/register" className="button-primary" style={{ textDecoration: 'none', padding: '0.75rem 1.5rem', background: 'transparent', border: '1px solid var(--primary)', color: 'var(--primary)' }}>
-              Register
+              {t.register}
             </Link>
           </div>
         </div>
@@ -121,7 +123,7 @@ export default function Profile() {
     return (
       <div className="auth-page">
         <div style={{ color: 'var(--text-muted)', fontFamily: 'JetBrains Mono, monospace', fontSize: '0.85rem', letterSpacing: '0.06em' }}>
-          LOADING PROFILE...
+          {t.loadingProfile}
         </div>
       </div>
     );
@@ -131,8 +133,8 @@ export default function Profile() {
     return (
       <div className="auth-page">
         <div className="auth-card" style={{ textAlign: 'center' }}>
-          <p style={{ color: '#f87171' }}>{error || 'Profile not found.'}</p>
-          <button className="button-primary" onClick={fetchProfile} style={{ marginTop: '1rem' }}>Retry</button>
+          <p style={{ color: '#f87171' }}>{error || t.profileNotFound}</p>
+          <button className="button-primary" onClick={fetchProfile} style={{ marginTop: '1rem' }}>{t.retry}</button>
         </div>
       </div>
     );
@@ -178,19 +180,19 @@ export default function Profile() {
         <div className="profile-stats">
           <div className="profile-stat">
             <span className="profile-stat-value">Lv.{profile.level}</span>
-            <span className="profile-stat-label">Level</span>
+            <span className="profile-stat-label">{t.level}</span>
           </div>
           <div className="profile-stat-divider" />
           <div className="profile-stat">
             <span className="profile-stat-value">{profile.totalPoints}</span>
-            <span className="profile-stat-label">Points</span>
+            <span className="profile-stat-label">{t.points}</span>
           </div>
           <div className="profile-stat-divider" />
           <div className="profile-stat">
             <span className="profile-stat-value" style={{ color: '#f97316' }}>
               🔥 {profile.streak}
             </span>
-            <span className="profile-stat-label">Day Streak</span>
+            <span className="profile-stat-label">{t.dayStreak}</span>
           </div>
         </div>
 
@@ -200,13 +202,13 @@ export default function Profile() {
           <div>
             <div style={{ fontWeight: 700, color: '#f97316', fontSize: '1rem' }}>
               {profile.streak > 0
-                ? `${profile.streak}-day discovery streak!`
-                : 'No active streak'}
+                ? t.discoveryStreak(profile.streak)
+                : t.noActiveStreak}
             </div>
             <div style={{ fontSize: '0.78rem', color: 'var(--text-muted)', marginTop: '0.1rem' }}>
               {profile.streak > 0
-                ? 'Keep exploring new places every day'
-                : 'Discover a new place today to start your streak'}
+                ? t.keepExploring
+                : t.discoverToStart}
             </div>
           </div>
         </div>
@@ -214,11 +216,11 @@ export default function Profile() {
 
       {/* Recent Reviews */}
       <div className="profile-section">
-        <h2 className="profile-section-title">Recent Reviews</h2>
+        <h2 className="profile-section-title">{t.recentReviews}</h2>
         {profile.recentReviews.length === 0 ? (
           <div className="profile-empty">
             <span style={{ fontSize: '2rem' }}>📝</span>
-            <p>No reviews yet. Go explore some places!</p>
+            <p>{t.noReviewsYet}</p>
           </div>
         ) : (
           <div className="profile-reviews-list">

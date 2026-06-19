@@ -6,17 +6,20 @@ exports.getCafeInfo = getCafeInfo;
 const fs_1 = require("fs");
 const path_1 = require("path");
 /**
- * Parses the cafe.geojson file and returns the GeoJSON data
- * @returns The parsed GeoJSON FeatureCollection
+ * cafe.geojson dosyasını ayrıştırır ve GeoJSON verilerini döndürür
+ * @returns Ayrıştırılmış GeoJSON FeatureCollection öğesi
  */
 function parseCafeGeoJson() {
     try {
-        // Use __dirname to get the directory of the compiled file (dist folder)
-        // Then navigate up and into src folder where cafe.geojson is located
-        const filePath = (0, path_1.join)(__dirname, '..', 'src', 'cafe.geojson');
+        // Derlenmiş dosyanın dizinini (dist klasörü) almak için __dirname kullan
+        // Ardından yukarı çıkıp cafe.geojson'un bulunduğu src klasörüne gezin
+        let filePath = (0, path_1.join)(__dirname, 'src', 'cafe.geojson');
+        if (!require('fs').existsSync(filePath)) {
+            filePath = (0, path_1.join)(__dirname, '..', 'src', 'cafe.geojson');
+        }
         const data = (0, fs_1.readFileSync)(filePath, 'utf-8');
         const geoJson = JSON.parse(data);
-        return geoJson; // Return the FeatureCollection
+        return geoJson; // FeatureCollection'ı döndür
     }
     catch (error) {
         console.error('Error parsing cafe.geojson:', error);
@@ -24,14 +27,14 @@ function parseCafeGeoJson() {
     }
 }
 /**
- * Example usage: Get all cafe features
+ * Örnek kullanım: Tüm kafe özelliklerini al
  */
 function getCafes() {
     const geoJson = parseCafeGeoJson();
     return geoJson.features;
 }
 /**
- * Get simplified cafe info with just name, type, and coordinates
+ * Yalnızca ad, tür ve koordinatları içeren basitleştirilmiş kafe bilgisini al
  */
 function getCafeInfo() {
     const cafes = getCafes();
@@ -41,5 +44,5 @@ function getCafeInfo() {
         coordinates: cafe.geometry.coordinates
     }));
 }
-console.log(getCafeInfo());
+//console.log(getCafeInfo());
 //# sourceMappingURL=parser.js.map

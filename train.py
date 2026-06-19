@@ -145,11 +145,11 @@ def build_sft_config(
         completion_only_loss=True,         # loss only on ### Response: tokens
         packing=False,
         # ── logging / checkpointing
-        logging_steps=10,
+        logging_steps=20,
         eval_strategy="steps",
-        eval_steps=50,
+        eval_steps=100,
         save_strategy="steps",
-        save_steps=100,
+        save_steps=200,
         save_total_limit=3,
         load_best_model_at_end=True,
         metric_for_best_model="eval_loss",
@@ -168,8 +168,8 @@ def main():
     parser.add_argument("--model",          default=None)
     parser.add_argument("--output_dir",     default="./outputs/quest-model")
     parser.add_argument("--epochs",         type=int,   default=3)
-    parser.add_argument("--lr",             type=float, default=3e-4)
-    parser.add_argument("--max_length",     type=int,   default=512)
+    parser.add_argument("--lr",             type=float, default=2e-4)
+    parser.add_argument("--max_length",     type=int,   default=1024)
     parser.add_argument("--no_flash_attn",  action="store_true")
     parser.add_argument("--merge_and_save", action="store_true")
     args = parser.parse_args()

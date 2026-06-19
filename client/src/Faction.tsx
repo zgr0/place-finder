@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from 'react'
 import { Link } from 'react-router-dom'
+import { useLanguage } from './LanguageContext'
 
 const API_BASE = 'http://localhost:3000';
 
@@ -31,12 +32,12 @@ function Avatar({ username, picture, size = 32 }: { username: string; picture: s
   );
 }
 
-function VenueCard({ venueName }: { venueName: string }) {
+function VenueCard({ venueName, sharedPlaceLabel }: { venueName: string; sharedPlaceLabel: string }) {
   return (
     <div className="faction-venue-card">
       <span style={{ fontSize: '1rem' }}>📍</span>
       <div style={{ flex: 1, minWidth: 0 }}>
-        <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.08em' }}>Shared place</div>
+        <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.08em' }}>{sharedPlaceLabel}</div>
         <div style={{ color: 'var(--text-main)', fontWeight: 600, fontSize: '0.9rem', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{venueName}</div>
       </div>
     </div>
@@ -55,6 +56,7 @@ export default function Faction() {
   const [showMembers, setShowMembers]     = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef       = useRef<HTMLTextAreaElement>(null);
+  const { t } = useLanguage();
 
   const userId      = parseInt(localStorage.getItem('userId') || '0');
   const factionId   = parseInt(localStorage.getItem('factionId') || '0');
@@ -148,13 +150,13 @@ export default function Faction() {
       <div className="auth-page">
         <div className="auth-card" style={{ textAlign: 'center' }}>
           <div style={{ fontSize: '2.5rem', marginBottom: '1rem' }}>⚔️</div>
-          <h2 className="auth-title">Faction Chat</h2>
+          <h2 className="auth-title">{t.factionChatTitle}</h2>
           <p style={{ color: 'var(--text-muted)', marginBottom: '1.5rem', fontSize: '0.9rem' }}>
-            Log in to communicate with your faction.
+            {t.loginToChat}
           </p>
           <div style={{ display: 'flex', gap: '0.75rem', justifyContent: 'center' }}>
-            <Link to="/login" className="button-primary" style={{ textDecoration: 'none', padding: '0.75rem 1.5rem' }}>Login</Link>
-            <Link to="/register" className="button-primary" style={{ textDecoration: 'none', padding: '0.75rem 1.5rem', background: 'transparent', border: '1px solid var(--primary)', color: 'var(--primary)' }}>Register</Link>
+            <Link to="/login" className="button-primary" style={{ textDecoration: 'none', padding: '0.75rem 1.5rem' }}>{t.login}</Link>
+            <Link to="/register" className="button-primary" style={{ textDecoration: 'none', padding: '0.75rem 1.5rem', background: 'transparent', border: '1px solid var(--primary)', color: 'var(--primary)' }}>{t.register}</Link>
           </div>
         </div>
       </div>
@@ -166,13 +168,13 @@ export default function Faction() {
       <div className="auth-page">
         <div className="auth-card" style={{ textAlign: 'center' }}>
           <div style={{ fontSize: '2.5rem', marginBottom: '1rem' }}>🏰</div>
-          <h2 className="auth-title">No Faction Yet</h2>
+          <h2 className="auth-title">{t.noFactionYet}</h2>
           <p style={{ color: 'var(--text-muted)', marginBottom: '1.5rem', fontSize: '0.9rem' }}>
-            Join or create a faction to access faction chat.
+            {t.joinFactionToChat}
           </p>
           <div style={{ display: 'flex', gap: '0.75rem', justifyContent: 'center' }}>
-            <Link to="/factions" className="button-primary" style={{ textDecoration: 'none', padding: '0.75rem 1.5rem' }}>Browse Factions</Link>
-            <Link to="/factions/create" className="button-primary" style={{ textDecoration: 'none', padding: '0.75rem 1.5rem', background: 'transparent', border: '1px solid var(--primary)', color: 'var(--primary)' }}>Create Faction</Link>
+            <Link to="/factions" className="button-primary" style={{ textDecoration: 'none', padding: '0.75rem 1.5rem' }}>{t.browseFactions}</Link>
+            <Link to="/factions/create" className="button-primary" style={{ textDecoration: 'none', padding: '0.75rem 1.5rem', background: 'transparent', border: '1px solid var(--primary)', color: 'var(--primary)' }}>{t.createFaction}</Link>
           </div>
         </div>
       </div>
@@ -187,14 +189,14 @@ export default function Faction() {
         <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
           <div style={{ width: 26, height: 26, borderRadius: 6, background: factionColor, flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '0.9rem' }}>{factionIcon}</div>
           <span className="faction-header-name">{factionName}</span>
-          <span className="faction-header-badge">{members.length} members</span>
+          <span className="faction-header-badge">{members.length} {t.members.toLowerCase()}</span>
         </div>
         <div style={{ display: 'flex', gap: '0.4rem' }}>
           <button className="faction-members-toggle" onClick={() => { setShowRanking(false); setShowMembers(v => !v); }}>
-            {showMembers ? 'Hide' : 'Members'}
+            {showMembers ? t.hide : t.members}
           </button>
           <button className="faction-members-toggle" onClick={() => { setShowMembers(false); setShowRanking(v => !v); }}>
-            {showRanking ? 'Hide' : '🏆'}
+            {showRanking ? t.hide : '🏆'}
           </button>
         </div>
       </div>
@@ -218,7 +220,7 @@ export default function Faction() {
       {showRanking && (
         <div className="faction-members-panel" style={{ flexDirection: 'column', gap: '0.35rem' }}>
           <div style={{ fontSize: '0.7rem', fontWeight: 700, color: 'var(--text-muted)', letterSpacing: '0.1em', textTransform: 'uppercase', marginBottom: '0.15rem' }}>
-            Member Rankings
+            {t.memberRankings}
           </div>
           {[...members].sort((a, b) => b.totalPoints - a.totalPoints).map((m, i) => (
             <div key={m.id} className="faction-ranking-row">
@@ -239,7 +241,7 @@ export default function Faction() {
         {messages.length === 0 && (
           <div className="faction-empty">
             <span style={{ fontSize: '2rem' }}>⚔️</span>
-            <p>No messages yet. Start the conversation!</p>
+            <p>{t.noMessages}</p>
           </div>
         )}
         {messages.map(msg => {
@@ -255,7 +257,7 @@ export default function Faction() {
                   </span>
                 </div>
                 {msg.type === 'venue'
-                  ? <VenueCard venueName={msg.content} />
+                  ? <VenueCard venueName={msg.content} sharedPlaceLabel={t.sharedPlace} />
                   : <p className="faction-msg-text">{msg.content}</p>
                 }
               </div>
@@ -278,7 +280,7 @@ export default function Faction() {
           ref={inputRef}
           className="faction-input"
           rows={1}
-          placeholder="Message your faction…"
+          placeholder={t.messageFaction}
           value={text}
           onChange={e => setText(e.target.value)}
           onKeyDown={handleKeyDown}
@@ -297,12 +299,12 @@ export default function Faction() {
       {showVenuePicker && (
         <div className="faction-venue-picker">
           <div className="faction-venue-picker-header">
-            <span style={{ fontWeight: 700, color: 'var(--text-main)', fontSize: '0.85rem' }}>Share a place</span>
+            <span style={{ fontWeight: 700, color: 'var(--text-main)', fontSize: '0.85rem' }}>{t.sharePlace}</span>
             <button onClick={() => { setShowVenuePicker(false); setVenueSearch(''); }} style={{ background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', fontSize: '1.1rem' }}>×</button>
           </div>
           <input
             className="form-field"
-            placeholder="Search venues…"
+            placeholder={t.searchVenues}
             value={venueSearch}
             onChange={e => setVenueSearch(e.target.value)}
             autoFocus
@@ -310,7 +312,7 @@ export default function Faction() {
           />
           <div className="faction-venue-list">
             {filteredVenues.length === 0 && (
-              <div style={{ color: 'var(--text-muted)', fontSize: '0.85rem', padding: '0.75rem', textAlign: 'center' }}>No venues found</div>
+              <div style={{ color: 'var(--text-muted)', fontSize: '0.85rem', padding: '0.75rem', textAlign: 'center' }}>{t.noVenuesFound}</div>
             )}
             {filteredVenues.slice(0, 30).map(v => (
               <button key={v} className="faction-venue-item" onClick={() => handleVenueShare(v)}>

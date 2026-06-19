@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { useLanguage } from './LanguageContext';
 
 interface ReviewModalProps {
   venueName: string;
@@ -36,6 +37,7 @@ const ReviewModal: React.FC<ReviewModalProps> = ({ venueName, onClose }) => {
   const [isLoading, setIsLoading] = useState(false);
   const [reviews, setReviews] = useState<any[]>([]);
   const [loadingReviews, setLoadingReviews] = useState(false);
+  const { t } = useLanguage();
 
   useEffect(() => {
     if (!venueName) return;
@@ -110,7 +112,7 @@ const ReviewModal: React.FC<ReviewModalProps> = ({ venueName, onClose }) => {
         
         <div className="review-modal-header">
           <div>
-            <h1 className="review-modal-title">Review Venue</h1>
+            <h1 className="review-modal-title">{t.reviewVenue}</h1>
             <p className="review-modal-subtitle">{venueName}</p>
           </div>
           <button onClick={onClose} className="review-modal-close">
@@ -126,7 +128,7 @@ const ReviewModal: React.FC<ReviewModalProps> = ({ venueName, onClose }) => {
               <div className="flex-col mt-4">
                 <textarea
                   className="review-textarea"
-                  placeholder="Share details of your own experience at this place..."
+                  placeholder={t.shareExperience}
                   value={content}
                   onChange={e => setContent(e.target.value)}
                 />
@@ -143,7 +145,7 @@ const ReviewModal: React.FC<ReviewModalProps> = ({ venueName, onClose }) => {
                   disabled={isLoading}
                 >
                   {isLoading ? <span className="loader" style={{width: '18px', height: '18px', borderWidth: '2px'}}></span> : null}
-                  {isLoading ? 'Posting...' : 'Post Review'}
+                  {isLoading ? t.posting : t.postReview}
                 </button>
               </div>
             </form>
@@ -152,9 +154,9 @@ const ReviewModal: React.FC<ReviewModalProps> = ({ venueName, onClose }) => {
           <hr style={{ borderColor: 'var(--border-light)', margin: '0' }} />
 
           <section>
-            <h2 style={{ color: 'var(--text-main)', marginTop: '0', marginBottom: '1rem' }}>Past Reviews</h2>
+            <h2 style={{ color: 'var(--text-main)', marginTop: '0', marginBottom: '1rem' }}>{t.pastReviews}</h2>
             {loadingReviews ? (
-              <div className="text-center text-slate-400">Loading reviews...</div>
+              <div className="text-center text-slate-400">{t.loadingReviews}</div>
             ) : reviews.length > 0 ? (
               <div className="flex-col">
                 {reviews.map((r, i) => (
@@ -175,15 +177,15 @@ const ReviewModal: React.FC<ReviewModalProps> = ({ venueName, onClose }) => {
                         {'★'.repeat(r.rating)}{'☆'.repeat(5 - r.rating)}
                       </div>
                     </div>
-                    <p className="review-content">{r.content || 'No text provided.'}</p>
+                    <p className="review-content">{r.content || t.noTextProvided}</p>
                   </div>
                 ))}
               </div>
             ) : (
               <div className="text-center text-slate-400" style={{ padding: '2rem', background: 'rgba(0,0,0,0.2)', borderRadius: '12px' }}>
                 <div style={{ fontSize: '2.5rem', marginBottom: '0.5rem' }}>📝</div>
-                <div style={{ fontWeight: '500' }}>No reviews yet</div>
-                <div style={{ fontSize: '0.85rem' }}>Be the first to share your experience!</div>
+                <div style={{ fontWeight: '500' }}>{t.noReviews}</div>
+                <div style={{ fontSize: '0.85rem' }}>{t.beFirst}</div>
               </div>
             )}
           </section>

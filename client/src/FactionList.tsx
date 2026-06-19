@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
+import { useLanguage } from './LanguageContext';
 
 const API_BASE = 'http://localhost:3000';
 
@@ -24,6 +25,7 @@ export default function FactionList() {
 
   const userId = parseInt(localStorage.getItem('userId') || '0');
   const currentFactionId = parseInt(localStorage.getItem('factionId') || '0');
+  const { t } = useLanguage();
 
   useEffect(() => {
     fetch(`${API_BASE}/factions`)
@@ -66,9 +68,9 @@ export default function FactionList() {
     <div style={{ padding: '2rem', maxWidth: '860px', margin: '0 auto' }}>
       <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: '2rem', flexWrap: 'wrap', gap: '1rem' }}>
         <div>
-          <h1 style={{ color: 'var(--text-main)', fontSize: '1.5rem', fontWeight: 700, margin: 0 }}>Factions</h1>
+          <h1 style={{ color: 'var(--text-main)', fontSize: '1.5rem', fontWeight: 700, margin: 0 }}>{t.factions}</h1>
           <p style={{ color: 'var(--text-muted)', fontSize: '0.875rem', margin: '0.3rem 0 0' }}>
-            Join a faction to compete for territory
+            {t.joinFactionCompete}
           </p>
         </div>
         <Link
@@ -76,7 +78,7 @@ export default function FactionList() {
           className="button-primary"
           style={{ textDecoration: 'none', padding: '0.6rem 1.2rem', fontSize: '0.875rem' }}
         >
-          + Create Faction
+          {t.createFactionBtn}
         </Link>
       </div>
 
@@ -94,9 +96,9 @@ export default function FactionList() {
           border: '1px dashed var(--border-light)', borderRadius: '12px',
         }}>
           <div style={{ fontSize: '2.5rem', marginBottom: '0.75rem' }}>⚔️</div>
-          <p style={{ margin: '0 0 1.25rem' }}>No factions yet. Be the first to create one!</p>
+          <p style={{ margin: '0 0 1.25rem' }}>{t.noFactionsYet}</p>
           <Link to="/factions/create" className="button-primary" style={{ textDecoration: 'none' }}>
-            Create Faction
+            {t.createFaction}
           </Link>
         </div>
       )}
@@ -139,7 +141,7 @@ export default function FactionList() {
                       padding: '0.12rem 0.45rem', borderRadius: 4,
                       textTransform: 'uppercase', letterSpacing: '0.06em',
                     }}>
-                      Your Faction
+                      {t.yourFaction}
                     </span>
                   )}
                 </div>
@@ -171,7 +173,7 @@ export default function FactionList() {
                     style={{ opacity: 0.55, cursor: 'default', fontSize: '0.8rem', padding: '0.45rem 1rem' }}
                     disabled
                   >
-                    Joined
+                    {t.joined}
                   </button>
                 ) : (
                   <button
@@ -183,8 +185,8 @@ export default function FactionList() {
                     {joiningId === faction.id
                       ? '…'
                       : userId
-                        ? 'Join'
-                        : 'Login to Join'}
+                        ? t.join
+                        : t.loginToJoin}
                   </button>
                 )}
               </div>

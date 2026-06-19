@@ -20,16 +20,16 @@ interface CafeInfo {
     coordinates: number[];
 }
 /**
- * Parses the cafe.geojson file and returns the GeoJSON data
- * @returns The parsed GeoJSON FeatureCollection
+ * cafe.geojson dosyasını ayrıştırır ve GeoJSON verilerini döndürür
+ * @returns Ayrıştırılmış GeoJSON FeatureCollection öğesi
  */
 export declare function parseCafeGeoJson(): GeoJsonFeatureCollection;
 /**
- * Example usage: Get all cafe features
+ * Örnek kullanım: Tüm kafe özelliklerini al
  */
 export declare function getCafes(): GeoJsonFeature[];
 /**
- * Get simplified cafe info with just name, type, and coordinates
+ * Yalnızca ad, tür ve koordinatları içeren basitleştirilmiş kafe bilgisini al
  */
 export declare function getCafeInfo(): CafeInfo[];
 export {};
