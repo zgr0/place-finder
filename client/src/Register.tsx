@@ -1,7 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useLanguage } from './LanguageContext';
-
-const API_BASE = 'http://localhost:3000';
+import { API_BASE } from './config';
 
 interface FactionOption {
   id: number;

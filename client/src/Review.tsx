@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useLanguage } from './LanguageContext';
+import { API_BASE } from './config';
 
 interface ReviewModalProps {
   venueName: string;
@@ -44,7 +45,7 @@ const ReviewModal: React.FC<ReviewModalProps> = ({ venueName, onClose }) => {
     const fetchReviews = async () => {
       setLoadingReviews(true);
       try {
-        const res = await fetch(`http://localhost:3000/reviews/${encodeURIComponent(venueName)}`);
+        const res = await fetch(`${API_BASE}/reviews/${encodeURIComponent(venueName)}`);
         if (res.ok) {
           const data = await res.json();
           setReviews(data);
@@ -73,7 +74,7 @@ const ReviewModal: React.FC<ReviewModalProps> = ({ venueName, onClose }) => {
     }
 
     try {
-      const res = await fetch('http://localhost:3000/reviews', {
+      const res = await fetch(`${API_BASE}/reviews`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -89,7 +90,7 @@ const ReviewModal: React.FC<ReviewModalProps> = ({ venueName, onClose }) => {
         setRating(5);
         setContent('');
         // Refresh reviews
-        const fetchRes = await fetch(`http://localhost:3000/reviews/${encodeURIComponent(venueName)}`);
+        const fetchRes = await fetch(`${API_BASE}/reviews/${encodeURIComponent(venueName)}`);
         if (fetchRes.ok) {
           const data = await fetchRes.json();
           setReviews(data);

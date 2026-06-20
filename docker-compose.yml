@@ -1,0 +1,66 @@
+services:
+  postgres:
+    image: postgis/postgis:16-3.4
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    restart: always
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  server:
+    image: ${GHCR_IMAGE_PREFIX}/server:latest
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
+      PORT: 3000
+      FSQ_API_KEY: ${FSQ_API_KEY}
+      GEMINI_API_KEY: ${GEMINI_API_KEY}
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY}
+      INFERENCE_URL: http://ai:8000
+      NODE_ENV: production
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: always
+
+  ai:
+    image: ${GHCR_IMAGE_PREFIX}/ai:latest
+    volumes:
+      - models:/models
+    environment:
+      MODEL_PATH: /models/quest-model-q4km.gguf
+      N_THREADS: ${AI_THREADS:-4}
+    restart: always
+
+  frontend:
+    image: ${GHCR_IMAGE_PREFIX}/frontend:latest
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./certbot/conf:/etc/letsencrypt:ro
+      - ./certbot/www:/var/www/certbot:ro
+    depends_on:
+      - server
+    restart: always
+
+  certbot:
+    image: certbot/certbot
+    volumes:
+      - ./certbot/conf:/etc/letsencrypt
+      - ./certbot/www:/var/www/certbot
+    entrypoint: >
+      /bin/sh -c "trap exit TERM; while :; do
+        certbot renew --webroot -w /var/www/certbot --quiet;
+        sleep 12h & wait $${!};
+      done;"
+
+volumes:
+  pgdata:
+  models:

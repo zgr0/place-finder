@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { useLanguage } from './LanguageContext';
+import { API_BASE } from './config';
 
 interface Objective {
   text: string;
@@ -27,7 +28,7 @@ export default function MissionPanel() {
     setLoading(true);
     setError(null);
     try {
-      const res = await fetch('http://localhost:3000/missions/generate', {
+      const res = await fetch(`${API_BASE}/missions/generate`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ lang }),

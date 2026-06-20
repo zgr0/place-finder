@@ -1,8 +1,7 @@
 import { useState, useEffect, useRef } from 'react'
 import { Link } from 'react-router-dom'
 import { useLanguage } from './LanguageContext'
-
-const API_BASE = 'http://localhost:3000';
+import { API_BASE } from './config';
 
 
 interface ChatMessage {

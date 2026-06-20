@@ -2,6 +2,7 @@ import React, { useEffect, useRef } from 'react';
 import maplibregl from 'maplibre-gl';
 import 'maplibre-gl/dist/maplibre-gl.css';
 import * as h3 from 'h3-js';
+import { API_BASE } from './config';
 
 const RESOLUTION = 9;
 
@@ -73,7 +74,7 @@ const MapGrid = () => {
             let ownershipMap: Record<string, number> = {};
             try {
                 // 3. Arka uçtan sahiplik verilerini getir
-                const response = await fetch('http://localhost:3000/territory/ownership', {
+                const response = await fetch(`${API_BASE}/territory/ownership`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ hexIds: visibleHexes }),

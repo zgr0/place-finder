@@ -3,6 +3,7 @@ import maplibregl from 'maplibre-gl';
 import 'maplibre-gl/dist/maplibre-gl.css';
 import './map.css';
 import ReviewModal from './Review';
+import { API_BASE } from './config';
 import MissionPanel from './MissionPanel';
 import { useLanguage } from './LanguageContext';
 
@@ -45,7 +46,7 @@ export default function Map() {
   }, [t]);
 
   useEffect(() => {
-    fetch('http://localhost:3000/factions/ranking')
+    fetch(`${API_BASE}/factions/ranking`)
       .then(r => r.ok ? r.json() : [])
       .then(setFactionRanking)
       .catch(() => {});
@@ -160,7 +161,7 @@ export default function Map() {
         } catch (e) { console.warn('Building layer update failed:', e); }
 
         console.log('Map loaded, fetching venues');
-        const res = await fetch('http://localhost:3000/venues');
+        const res = await fetch(`${API_BASE}/venues`);
         if (!res.ok) throw new Error(`Fetch failed ${res.status}`);
         const json = await res.json();
         console.log('Venues loaded', json);
@@ -326,7 +327,7 @@ export default function Map() {
           const lang = (window as any).__appLang || 'en';
           if (btn) { btn.textContent = lang === 'tr' ? 'Oluşturuluyor...' : 'Generating...'; btn.disabled = true; }
           try {
-            const res = await fetch('http://localhost:3000/venues/describe', {
+            const res = await fetch(`${API_BASE}/venues/describe`, {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({ name, amenity, cuisine, address, opening_hours, lang }),
@@ -353,7 +354,7 @@ export default function Map() {
           hoverPopup.setHTML(buildPopupHtml(currentPopupMerged, true));
 
           try {
-            const res = await fetch(`http://localhost:3000/venues/enrich?name=${encodeURIComponent(name)}&lat=${lat}&lng=${lng}`);
+            const res = await fetch(`${API_BASE}/venues/enrich?name=${encodeURIComponent(name)}&lat=${lat}&lng=${lng}`);
             const enriched = await res.json();
             enrichCache[key] = enriched;
             // Merge enriched into current props
