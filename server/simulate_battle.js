@@ -1,6 +1,6 @@
 /**
  * simulate_battle.js — Comprehensive stress & battle simulation
- *
+ 
  * Usage:
  *   node simulate_battle.js
  *
