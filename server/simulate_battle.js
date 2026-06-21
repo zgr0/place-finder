@@ -1,9 +1,6 @@
 /**
  * simulate_battle.js — Comprehensive stress & battle simulation
  *
- * Tests server limits via real HTTP requests (not direct DB writes).
- * Simulates concurrent users with realistic behavior archetypes.
- *
  * Usage:
  *   node simulate_battle.js
  *
@@ -22,22 +19,22 @@ const { PrismaPg } = require('@prisma/adapter-pg');
 // ─── Config ───────────────────────────────────────────────────────────────────
 
 const CFG = {
-  baseUrl:     process.env.SIM_BASE_URL   || 'http://localhost:3000',
-  usersPerFaction: parseInt(process.env.SIM_USERS        || '10'),
-  concurrency:     parseInt(process.env.SIM_CONCURRENCY  || '20'),
-  durationMs:      parseInt(process.env.SIM_DURATION     || '60') * 1000,
+  baseUrl: process.env.SIM_BASE_URL || 'http://localhost:3000',
+  usersPerFaction: parseInt(process.env.SIM_USERS || '10'),
+  concurrency: parseInt(process.env.SIM_CONCURRENCY || '20'),
+  durationMs: parseInt(process.env.SIM_DURATION || '60') * 1000,
   statsIntervalMs: 10_000,
-  axiosTimeout:    8_000,
+  axiosTimeout: 8_000,
 };
 
 // Weighted action pool per archetype
 // power = aggressive reviewer, casual = balanced, lurker = chat-heavy
 const ARCHETYPES = {
-  power:  { review: 0.65, chat: 0.20, territory: 0.10, profile: 0.05, thinkMs: [20,  200]  },
-  casual: { review: 0.45, chat: 0.35, territory: 0.12, profile: 0.08, thinkMs: [100, 600]  },
+  power: { review: 0.65, chat: 0.20, territory: 0.10, profile: 0.05, thinkMs: [20, 200] },
+  casual: { review: 0.45, chat: 0.35, territory: 0.12, profile: 0.08, thinkMs: [100, 600] },
   lurker: { review: 0.15, chat: 0.70, territory: 0.08, profile: 0.07, thinkMs: [300, 1200] },
 };
-const ARCHETYPE_DIST = ['power','power','power','casual','casual','casual','casual','casual','lurker','lurker'];
+const ARCHETYPE_DIST = ['power', 'power', 'power', 'casual', 'casual', 'casual', 'casual', 'casual', 'lurker', 'lurker'];
 
 // ─── Content pools ────────────────────────────────────────────────────────────
 
@@ -115,8 +112,8 @@ class Stats {
     this.factionReviews[factionId] = (this.factionReviews[factionId] || 0) + 1;
   }
 
-  totalOps()  { return Object.values(this.ops).reduce((a,b) => a+b, 0); }
-  totalErrs() { return Object.values(this.errs).reduce((a,b) => a+b, 0); }
+  totalOps() { return Object.values(this.ops).reduce((a, b) => a + b, 0); }
+  totalErrs() { return Object.values(this.errs).reduce((a, b) => a + b, 0); }
 
   rps() {
     const elapsed = (Date.now() - this.start) / 1000;
@@ -125,14 +122,14 @@ class Stats {
 
   percentile(p) {
     if (!this.latencies.length) return 0;
-    const sorted = [...this.latencies].sort((a,b) => a-b);
+    const sorted = [...this.latencies].sort((a, b) => a - b);
     const idx = Math.floor(sorted.length * p / 100);
     return sorted[Math.min(idx, sorted.length - 1)];
   }
 
   printPeriodic(factions) {
     const total = this.totalOps();
-    const errs  = this.totalErrs();
+    const errs = this.totalErrs();
     const errPct = total + errs > 0 ? ((errs / (total + errs)) * 100).toFixed(1) : '0.0';
     const elapsed = ((Date.now() - this.start) / 1000).toFixed(1);
 
@@ -144,10 +141,10 @@ class Stats {
     console.log(`❌ Errors  — reviews: ${this.errs.review}  chat: ${this.errs.chat}  territory: ${this.errs.territory}  profile: ${this.errs.profile}`);
 
     if (Object.keys(this.factionReviews).length > 0 && factions.length > 0) {
-      const ranked = [...factions].sort((a,b) =>
+      const ranked = [...factions].sort((a, b) =>
         (this.factionReviews[b.id] || 0) - (this.factionReviews[a.id] || 0)
       );
-      const lines = ranked.map((f,i) => {
+      const lines = ranked.map((f, i) => {
         const count = this.factionReviews[f.id] || 0;
         const bar = '█'.repeat(Math.min(Math.round(count / 2), 20));
         const medal = i === 0 ? '🏆' : i === 1 ? '🥈' : '🥉';
@@ -158,12 +155,12 @@ class Stats {
   }
 
   printFinal(factions, users) {
-    const total    = this.totalOps();
-    const errs     = this.totalErrs();
-    const errPct   = total + errs > 0 ? ((errs / (total + errs)) * 100).toFixed(1) : '0.0';
-    const elapsed  = ((Date.now() - this.start) / 1000).toFixed(1);
-    const maxLat   = this.latencies.length ? Math.max(...this.latencies) : 0;
-    const minLat   = this.latencies.length ? Math.min(...this.latencies) : 0;
+    const total = this.totalOps();
+    const errs = this.totalErrs();
+    const errPct = total + errs > 0 ? ((errs / (total + errs)) * 100).toFixed(1) : '0.0';
+    const elapsed = ((Date.now() - this.start) / 1000).toFixed(1);
+    const maxLat = this.latencies.length ? Math.max(...this.latencies) : 0;
+    const minLat = this.latencies.length ? Math.min(...this.latencies) : 0;
 
     console.log(`\n${'═'.repeat(60)}`);
     console.log('🏁  FINAL BATTLE REPORT');
@@ -189,7 +186,7 @@ class Stats {
     if (Object.keys(this.errMsgs).length > 0) {
       console.log('Top Errors:');
       Object.entries(this.errMsgs)
-        .sort((a,b) => b[1] - a[1])
+        .sort((a, b) => b[1] - a[1])
         .slice(0, 5)
         .forEach(([msg, count]) => console.log(`  [${count}x] ${msg.slice(0, 80)}`));
       console.log('');
@@ -197,20 +194,20 @@ class Stats {
 
     if (factions.length > 0) {
       console.log('Faction Battle Results:');
-      const ranked = [...factions].sort((a,b) =>
+      const ranked = [...factions].sort((a, b) =>
         (this.factionReviews[b.id] || 0) - (this.factionReviews[a.id] || 0)
       );
       ranked.forEach((f, i) => {
         const count = this.factionReviews[f.id] || 0;
         const label = i === 0 ? ' ← TERRITORY LEADER 🏆' : '';
-        console.log(`  ${['🥇','🥈','🥉'][i] || ' '} ${f.name.padEnd(22)} ${count} reviews${label}`);
+        console.log(`  ${['🥇', '🥈', '🥉'][i] || ' '} ${f.name.padEnd(22)} ${count} reviews${label}`);
       });
       console.log('');
     }
 
     console.log(`Users simulated: ${users.length}`);
-    const archetypeCounts = users.reduce((acc, u) => { acc[u.archetype] = (acc[u.archetype]||0)+1; return acc; }, {});
-    console.log(`  Power users: ${archetypeCounts.power||0}  Casual: ${archetypeCounts.casual||0}  Lurkers: ${archetypeCounts.lurker||0}`);
+    const archetypeCounts = users.reduce((acc, u) => { acc[u.archetype] = (acc[u.archetype] || 0) + 1; return acc; }, {});
+    console.log(`  Power users: ${archetypeCounts.power || 0}  Casual: ${archetypeCounts.casual || 0}  Lurkers: ${archetypeCounts.lurker || 0}`);
     console.log(`${'═'.repeat(60)}`);
   }
 }
@@ -290,8 +287,8 @@ async function ensureFactions() {
 
   console.log('No factions found — creating 3 test factions...');
   const templates = [
-    { name: 'Red Dragons',  color: '#ef4444', icon: '🐉', description: 'Aggressive territorial dominators' },
-    { name: 'Blue Storm',   color: '#3b82f6', icon: '⚡', description: 'Speed and coordination' },
+    { name: 'Red Dragons', color: '#ef4444', icon: '🐉', description: 'Aggressive territorial dominators' },
+    { name: 'Blue Storm', color: '#3b82f6', icon: '⚡', description: 'Speed and coordination' },
     { name: 'Green Warden', color: '#22c55e', icon: '🌿', description: 'Patient explorers, deep roots' },
   ];
   const created = [];
@@ -416,12 +413,12 @@ async function main() {
   for (const faction of factions) {
     for (let i = 0; i < CFG.usersPerFaction; i++) {
       const archetype = ARCHETYPE_DIST[i % ARCHETYPE_DIST.length];
-      const username  = `sim_${RUN_ID}_f${faction.id}_u${i}`;
-      const email     = `${username}@sim.local`;
+      const username = `sim_${RUN_ID}_f${faction.id}_u${i}`;
+      const email = `${username}@sim.local`;
       try {
         const data = await registerOrLogin(email, username, SIM_PASS, faction.id);
         users.push({
-          id:        data.id,
+          id: data.id,
           username,
           factionId: faction.id,
           archetype,
@@ -444,7 +441,7 @@ async function main() {
   console.log(`\nBattle starts now! Running for ${CFG.durationMs / 1000} seconds...\n`);
 
   // 5. Stats + stop signal
-  const stats      = new Stats();
+  const stats = new Stats();
   const stopSignal = { stop: false };
 
   // 6. Periodic stats printer
