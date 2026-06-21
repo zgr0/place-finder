@@ -63,6 +63,7 @@ jobs:
           tags: ${{ env.IMAGE_PREFIX }}/frontend:latest
           build-args: |
             VITE_API_URL=https://vps-8aae2664.vps.ovh.net/api
+            VITE_MAPTILER_KEY=${{ secrets.VITE_MAPTILER_KEY }}
           cache-from: type=gha,scope=frontend
           cache-to: type=gha,scope=frontend,mode=max
 
