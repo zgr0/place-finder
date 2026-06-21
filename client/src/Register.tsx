@@ -45,6 +45,8 @@ const Register = () => {
       });
 
       if (res.ok) {
+        const data = await res.json();
+        if (data.token) localStorage.setItem('token', data.token);
         setSuccess('Registration successful! Redirecting to login…');
         setTimeout(() => { window.location.href = '/login'; }, 1000);
         return;

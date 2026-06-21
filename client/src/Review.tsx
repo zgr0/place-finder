@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useLanguage } from './LanguageContext';
-import { API_BASE } from './config';
+import { API_BASE, authHeaders } from './config';
 
 interface ReviewModalProps {
   venueName: string;
@@ -76,13 +76,8 @@ const ReviewModal: React.FC<ReviewModalProps> = ({ venueName, onClose }) => {
     try {
       const res = await fetch(`${API_BASE}/reviews`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          userId: parseInt(userIdStr, 10),
-          venueName,
-          rating,
-          content
-        }),
+        headers: authHeaders(),
+        body: JSON.stringify({ venueName, rating, content }),
       });
 
       if (res.ok) {

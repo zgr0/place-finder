@@ -36,6 +36,16 @@ jest.mock('./parser', () => ({
   parseCafeGeoJson: jest.fn(),
 }));
 
+jest.mock('jsonwebtoken', () => ({
+  sign: jest.fn(() => 'mock-jwt-token'),
+  verify: jest.fn((token: string) => {
+    if (token === 'valid-test-token') return { userId: 1, factionId: 1 };
+    throw new Error('Invalid token');
+  }),
+}));
+
+jest.mock('sanitize-html', () => jest.fn((input: string) => input ?? ''));
+
 describe('Backend API Endpoints', () => {
   beforeEach(() => {
     jest.clearAllMocks();
@@ -96,6 +106,7 @@ describe('Backend API Endpoints', () => {
 
       expect(res.status).toBe(201);
       expect(res.body).toEqual({
+        token: 'mock-jwt-token',
         id: 1,
         email: 'test@example.com',
         username: 'TestUser',
@@ -154,7 +165,7 @@ describe('Backend API Endpoints', () => {
         .send({ email: '   test@example.com', password: 'password_123' });
 
       expect(res.status).toBe(200);
-      expect(res.body).toEqual({ id: 1, username: 'TestUser', factionId: 2, factionName: null, factionColor: null, factionIcon: null });
+      expect(res.body).toEqual({ token: 'mock-jwt-token', id: 1, username: 'TestUser', factionId: 2, factionName: null, factionColor: null, factionIcon: null });
 
       expect(mockPrismaUser.findUnique).toHaveBeenCalledWith({ where: { email: 'test@example.com' }, include: { faction: { select: { name: true, color: true, icon: true } } } });
       expect(bcrypt.compare).toHaveBeenCalledWith('password_123', 'hashedPassword123');

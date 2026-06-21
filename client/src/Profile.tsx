@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react'
 import { Link } from 'react-router-dom'
 import { useLanguage } from './LanguageContext'
-import { API_BASE } from './config';
+import { API_BASE, authHeaders } from './config';
 
 
 interface RecentReview {
@@ -77,7 +77,7 @@ export default function Profile() {
       try {
         const res = await fetch(`${API_BASE}/users/${userId}/profile-picture`, {
           method: 'PUT',
-          headers: { 'Content-Type': 'application/json' },
+          headers: authHeaders(),
           body: JSON.stringify({ profilePicture: base64 }),
         });
         if (!res.ok) throw new Error('Upload failed');

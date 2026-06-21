@@ -34,6 +34,15 @@ jest.mock('bcrypt', () => ({ hash: jest.fn(), compare: jest.fn() }));
 jest.mock('./parser', () => ({ parseCafeGeoJson: jest.fn() }));
 jest.mock('axios');
 jest.mock('h3-js');
+jest.mock('jsonwebtoken', () => ({
+  sign: jest.fn(() => 'mock-jwt-token'),
+  verify: jest.fn((token: string) => {
+    if (token === 'valid-test-token') return { userId: 1, factionId: 1 };
+    if (token === 'other-user-token') return { userId: 2, factionId: 2 };
+    throw new Error('Invalid token');
+  }),
+}));
+jest.mock('sanitize-html', () => jest.fn((input: string) => input ?? ''));
 
 import { PrismaClient } from '@prisma/client';
 import axios from 'axios';
@@ -149,13 +158,20 @@ describe('Extended API Endpoints', () => {
   });
 
   describe('POST /reviews', () => {
+    it('returns 401 without auth token', async () => {
+      const res = await request(app).post('/reviews').send({ venueName: 'Cafe Y', rating: 4 });
+      expect(res.status).toBe(401);
+      expect(res.body).toEqual({ error: 'Authentication required' });
+    });
+
     it('creates a review and returns 201', async () => {
       db.venue.findFirst.mockResolvedValue({ id: 10, name: 'Cafe Y' });
       db.review.create.mockResolvedValue({ id: 5, userId: 1, venueId: 10, rating: 4, content: 'nice' });
 
       const res = await request(app)
         .post('/reviews')
-        .send({ userId: 1, venueName: 'Cafe Y', rating: 4, content: 'nice' });
+        .set('Authorization', 'Bearer valid-test-token')
+        .send({ venueName: 'Cafe Y', rating: 4, content: 'nice' });
 
       expect(res.status).toBe(201);
       expect(res.body).toMatchObject({ id: 5, rating: 4 });
@@ -167,15 +183,17 @@ describe('Extended API Endpoints', () => {
     it('returns 400 when rating is missing', async () => {
       const res = await request(app)
         .post('/reviews')
-        .send({ userId: 1, venueName: 'Cafe Y' });
+        .set('Authorization', 'Bearer valid-test-token')
+        .send({ venueName: 'Cafe Y' });
       expect(res.status).toBe(400);
-      expect(res.body).toEqual({ error: 'userId, venueName, and rating are required' });
+      expect(res.body).toEqual({ error: 'venueName and rating are required' });
     });
 
     it('returns 400 when rating is not a number', async () => {
       const res = await request(app)
         .post('/reviews')
-        .send({ userId: 1, venueName: 'Cafe Y', rating: 'five' });
+        .set('Authorization', 'Bearer valid-test-token')
+        .send({ venueName: 'Cafe Y', rating: 'five' });
       expect(res.status).toBe(400);
     });
 
@@ -183,7 +201,8 @@ describe('Extended API Endpoints', () => {
       db.venue.findFirst.mockResolvedValue(null);
       const res = await request(app)
         .post('/reviews')
-        .send({ userId: 1, venueName: 'Unknown', rating: 3 });
+        .set('Authorization', 'Bearer valid-test-token')
+        .send({ venueName: 'Unknown', rating: 3 });
       expect(res.status).toBe(404);
       expect(res.body).toEqual({ error: 'Venue not found' });
     });
@@ -193,7 +212,8 @@ describe('Extended API Endpoints', () => {
       db.review.create.mockRejectedValue(new Error('insert failed'));
       const res = await request(app)
         .post('/reviews')
-        .send({ userId: 1, venueName: 'Cafe', rating: 3 });
+        .set('Authorization', 'Bearer valid-test-token')
+        .send({ venueName: 'Cafe', rating: 3 });
       expect(res.status).toBe(500);
       expect(res.body).toEqual({ error: 'Failed to create review' });
     });
@@ -226,78 +246,90 @@ describe('Extended API Endpoints', () => {
   });
 
   describe('POST /factions', () => {
-    it('creates faction and assigns creator as member', async () => {
+    it('returns 401 without auth token', async () => {
+      const res = await request(app).post('/factions').send({ name: 'Blue', color: '#00f' });
+      expect(res.status).toBe(401);
+    });
+
+    it('creates faction, assigns creator from token, and returns new token', async () => {
       db.faction.create.mockResolvedValue({ id: 3, name: 'Blue', color: '#00f', icon: '🛡️' });
       db.user.update.mockResolvedValue({});
 
       const res = await request(app)
         .post('/factions')
-        .send({ name: 'Blue', color: '#00f', createdBy: 'user-1' });
+        .set('Authorization', 'Bearer valid-test-token')
+        .send({ name: 'Blue', color: '#00f' });
 
       expect(res.status).toBe(201);
-      expect(res.body).toMatchObject({ id: 3, name: 'Blue' });
+      expect(res.body).toMatchObject({ id: 3, name: 'Blue', token: 'mock-jwt-token' });
       expect(db.user.update).toHaveBeenCalledWith({
-        where: { id: 'user-1' },
+        where: { id: 1 },
         data: { factionId: 3 },
       });
     });
 
-    it('creates faction without assigning creator when createdBy omitted', async () => {
-      db.faction.create.mockResolvedValue({ id: 4, name: 'Green', color: '#0f0', icon: '⚔️' });
-
+    it('returns 400 when name missing', async () => {
       const res = await request(app)
         .post('/factions')
-        .send({ name: 'Green', color: '#0f0' });
-
-      expect(res.status).toBe(201);
-      expect(db.user.update).not.toHaveBeenCalled();
-    });
-
-    it('returns 400 when name missing', async () => {
-      const res = await request(app).post('/factions').send({ color: '#00f' });
+        .set('Authorization', 'Bearer valid-test-token')
+        .send({ color: '#00f' });
       expect(res.status).toBe(400);
       expect(res.body).toEqual({ error: 'name and color are required' });
     });
 
     it('returns 400 when color missing', async () => {
-      const res = await request(app).post('/factions').send({ name: 'Blue' });
+      const res = await request(app)
+        .post('/factions')
+        .set('Authorization', 'Bearer valid-test-token')
+        .send({ name: 'Blue' });
       expect(res.status).toBe(400);
     });
   });
 
   describe('POST /factions/:factionId/join', () => {
-    it('joins faction successfully', async () => {
+    it('returns 401 without auth token', async () => {
+      const res = await request(app).post('/factions/2/join').send({});
+      expect(res.status).toBe(401);
+    });
+
+    it('joins faction successfully and returns new token', async () => {
       db.faction.findUnique.mockResolvedValue({ id: 2, name: 'Green', color: '#0f0', icon: '🌿' });
       db.user.update.mockResolvedValue({});
 
-      const res = await request(app).post('/factions/2/join').send({ userId: 'u-1' });
+      const res = await request(app)
+        .post('/factions/2/join')
+        .set('Authorization', 'Bearer valid-test-token')
+        .send({});
       expect(res.status).toBe(200);
-      expect(res.body).toMatchObject({ success: true, factionId: 2, factionName: 'Green' });
+      expect(res.body).toMatchObject({ success: true, factionId: 2, factionName: 'Green', token: 'mock-jwt-token' });
     });
 
     it('returns 404 when faction does not exist', async () => {
       db.faction.findUnique.mockResolvedValue(null);
-      const res = await request(app).post('/factions/99/join').send({ userId: 'u-1' });
+      const res = await request(app)
+        .post('/factions/99/join')
+        .set('Authorization', 'Bearer valid-test-token')
+        .send({});
       expect(res.status).toBe(404);
       expect(res.body).toEqual({ error: 'Faction not found' });
     });
 
     it('returns 400 for non-numeric factionId', async () => {
-      const res = await request(app).post('/factions/abc/join').send({ userId: 'u-1' });
+      const res = await request(app)
+        .post('/factions/abc/join')
+        .set('Authorization', 'Bearer valid-test-token')
+        .send({});
       expect(res.status).toBe(400);
       expect(res.body).toEqual({ error: 'Invalid factionId' });
-    });
-
-    it('returns 400 when userId missing', async () => {
-      const res = await request(app).post('/factions/2/join').send({});
-      expect(res.status).toBe(400);
-      expect(res.body).toEqual({ error: 'userId is required' });
     });
 
     it('returns 500 on DB error', async () => {
       db.faction.findUnique.mockResolvedValue({ id: 2 });
       db.user.update.mockRejectedValue(new Error('db fail'));
-      const res = await request(app).post('/factions/2/join').send({ userId: 'u-1' });
+      const res = await request(app)
+        .post('/factions/2/join')
+        .set('Authorization', 'Bearer valid-test-token')
+        .send({});
       expect(res.status).toBe(500);
     });
   });
@@ -358,17 +390,23 @@ describe('Extended API Endpoints', () => {
   });
 
   describe('POST /factions/:factionId/messages', () => {
+    it('returns 401 without auth token', async () => {
+      const res = await request(app).post('/factions/1/messages').send({ content: 'hi' });
+      expect(res.status).toBe(401);
+    });
+
     it('sends a message when user belongs to faction', async () => {
-      db.user.findUnique.mockResolvedValue({ id: 'u-1', factionId: 1 });
+      db.user.findUnique.mockResolvedValue({ id: 1, factionId: 1 });
       db.message.create.mockResolvedValue({
-        id: 5, content: 'hi', factionId: 1, userId: 'u-1', type: 'text',
+        id: 5, content: 'hi', factionId: 1, userId: 1, type: 'text',
         createdAt: new Date(),
         user: { username: 'u1', profilePicture: null },
       });
 
       const res = await request(app)
         .post('/factions/1/messages')
-        .send({ userId: 'u-1', content: 'hi' });
+        .set('Authorization', 'Bearer valid-test-token')
+        .send({ content: 'hi' });
 
       expect(res.status).toBe(201);
       expect(res.body).toMatchObject({ content: 'hi' });
@@ -378,11 +416,12 @@ describe('Extended API Endpoints', () => {
     });
 
     it('returns 403 when user belongs to different faction', async () => {
-      db.user.findUnique.mockResolvedValue({ id: 'u-1', factionId: 2 });
+      db.user.findUnique.mockResolvedValue({ id: 1, factionId: 2 });
 
       const res = await request(app)
         .post('/factions/1/messages')
-        .send({ userId: 'u-1', content: 'hi' });
+        .set('Authorization', 'Bearer valid-test-token')
+        .send({ content: 'hi' });
 
       expect(res.status).toBe(403);
       expect(res.body).toEqual({ error: 'User does not belong to this faction' });
@@ -391,22 +430,17 @@ describe('Extended API Endpoints', () => {
     it('returns 400 when content missing', async () => {
       const res = await request(app)
         .post('/factions/1/messages')
-        .send({ userId: 'u-1' });
+        .set('Authorization', 'Bearer valid-test-token')
+        .send({});
       expect(res.status).toBe(400);
-      expect(res.body).toEqual({ error: 'userId and content are required' });
-    });
-
-    it('returns 400 when userId missing', async () => {
-      const res = await request(app)
-        .post('/factions/1/messages')
-        .send({ content: 'hello' });
-      expect(res.status).toBe(400);
+      expect(res.body).toEqual({ error: 'content is required' });
     });
 
     it('returns 400 for non-numeric factionId', async () => {
       const res = await request(app)
         .post('/factions/xyz/messages')
-        .send({ userId: 'u-1', content: 'hi' });
+        .set('Authorization', 'Bearer valid-test-token')
+        .send({ content: 'hi' });
       expect(res.status).toBe(400);
     });
   });
@@ -488,10 +522,26 @@ describe('Extended API Endpoints', () => {
   });
 
   describe('PUT /users/:userId/profile-picture', () => {
+    it('returns 401 without auth token', async () => {
+      const res = await request(app).put('/users/1/profile-picture')
+        .send({ profilePicture: 'data:image/png;base64,abc123' });
+      expect(res.status).toBe(401);
+    });
+
+    it('returns 403 when updating another user\'s picture', async () => {
+      const res = await request(app)
+        .put('/users/2/profile-picture')
+        .set('Authorization', 'Bearer valid-test-token')
+        .send({ profilePicture: 'data:image/png;base64,abc123' });
+      expect(res.status).toBe(403);
+      expect(res.body).toEqual({ error: 'Forbidden' });
+    });
+
     it('updates profile picture successfully', async () => {
       db.user.update.mockResolvedValue({});
       const res = await request(app)
         .put('/users/1/profile-picture')
+        .set('Authorization', 'Bearer valid-test-token')
         .send({ profilePicture: 'data:image/png;base64,abc123' });
 
       expect(res.status).toBe(200);
@@ -505,13 +555,17 @@ describe('Extended API Endpoints', () => {
     it('returns 400 when format is not a data URL', async () => {
       const res = await request(app)
         .put('/users/1/profile-picture')
+        .set('Authorization', 'Bearer valid-test-token')
         .send({ profilePicture: 'https://example.com/img.png' });
       expect(res.status).toBe(400);
       expect(res.body).toEqual({ error: 'Invalid image format' });
     });
 
     it('returns 400 when profilePicture missing', async () => {
-      const res = await request(app).put('/users/1/profile-picture').send({});
+      const res = await request(app)
+        .put('/users/1/profile-picture')
+        .set('Authorization', 'Bearer valid-test-token')
+        .send({});
       expect(res.status).toBe(400);
       expect(res.body).toEqual({ error: 'profilePicture is required' });
     });
@@ -519,6 +573,7 @@ describe('Extended API Endpoints', () => {
     it('returns 400 for non-numeric userId', async () => {
       const res = await request(app)
         .put('/users/abc/profile-picture')
+        .set('Authorization', 'Bearer valid-test-token')
         .send({ profilePicture: 'data:image/png;base64,x' });
       expect(res.status).toBe(400);
       expect(res.body).toEqual({ error: 'Invalid userId' });
@@ -528,6 +583,7 @@ describe('Extended API Endpoints', () => {
       db.user.update.mockRejectedValue(new Error('fail'));
       const res = await request(app)
         .put('/users/1/profile-picture')
+        .set('Authorization', 'Bearer valid-test-token')
         .send({ profilePicture: 'data:image/jpeg;base64,zzz' });
       expect(res.status).toBe(500);
       expect(res.body).toEqual({ error: 'Failed to update profile picture' });

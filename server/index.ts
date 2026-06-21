@@ -1,7 +1,9 @@
 import 'dotenv/config';
-import express, { Request, Response } from 'express';
+import express, { Request, Response, NextFunction } from 'express';
 import cors from 'cors';
 import bcrypt from 'bcrypt';
+import jwt from 'jsonwebtoken';
+import sanitizeHtml from 'sanitize-html';
 import axios from 'axios';
 import { GoogleGenerativeAI } from '@google/generative-ai';
 import { PrismaClient } from '@prisma/client';
@@ -15,6 +17,31 @@ const enrichmentCache = new Map<string, Record<string, any>>();
 if (process.env.NODE_ENV !== 'test' && !process.env.DATABASE_URL) {
   throw new Error('DATABASE_URL must be set in environment variables');
 }
+
+const JWT_SECRET = process.env.JWT_SECRET ?? 'venue-finder-dev-secret-change-in-prod';
+
+// Strip all HTML tags — plain text only stored in DB
+function sanitize(input: unknown): string {
+  if (typeof input !== 'string') return '';
+  return sanitizeHtml(input, { allowedTags: [], allowedAttributes: {} }).trim();
+}
+
+interface AuthPayload { userId: number; factionId: number | null }
+
+// Validates Bearer token; attaches req.user for downstream handlers
+const requireAuth = (req: Request, res: Response, next: NextFunction) => {
+  const header = req.headers.authorization;
+  if (!header?.startsWith('Bearer ')) {
+    return res.status(401).json({ error: 'Authentication required' });
+  }
+  try {
+    const payload = jwt.verify(header.slice(7), JWT_SECRET) as AuthPayload;
+    (req as any).user = payload;
+    next();
+  } catch {
+    return res.status(401).json({ error: 'Invalid or expired token' });
+  }
+};
 
 const app = express();
 const adapter = new PrismaPg({ connectionString: process.env.DATABASE_URL || 'postgres://dummy:dummy@localhost/dummy' });
@@ -74,13 +101,14 @@ app.get('/auth/register', (req: Request, res: Response) => {
 });
 
 app.post('/auth/register', async (req: Request, res: Response) => {
-  const { email: rawEmail, username, password, factionId } = req.body;
+  const { email: rawEmail, username: rawUsername, password, factionId } = req.body;
 
-  if (!rawEmail || !username || !password) {
+  if (!rawEmail || !rawUsername || !password) {
     return res.status(400).json({ error: 'email, username, and password are required' });
   }
 
   const email = rawEmail.toLowerCase().trim();
+  const username = sanitize(rawUsername);
   const parsedFactionId = typeof factionId === 'number' && factionId > 0 ? factionId : null;
 
   try {
@@ -95,7 +123,9 @@ app.post('/auth/register', async (req: Request, res: Response) => {
       include: { faction: { select: { name: true, color: true, icon: true } } },
     });
 
+    const token = jwt.sign({ userId: user.id, factionId: user.factionId ?? null }, JWT_SECRET, { expiresIn: '7d' });
     return res.status(201).json({
+      token,
       id: user.id,
       email: user.email,
       username: user.username,
@@ -132,7 +162,9 @@ app.post('/auth/login', async (req: Request, res: Response) => {
       return res.status(401).json({ error: 'Invalid credentials' });
     }
 
+    const token = jwt.sign({ userId: user.id, factionId: user.factionId ?? null }, JWT_SECRET, { expiresIn: '7d' });
     return res.status(200).json({
+      token,
       id: user.id,
       username: user.username,
       factionId: user.factionId,
@@ -311,30 +343,25 @@ app.get('/reviews/:venueName', async (req: Request, res: Response) => {
   }
 });
 
-app.post('/reviews', async (req: Request, res: Response) => {
-  const { userId, venueName, rating, content } = req.body;
+app.post('/reviews', requireAuth, async (req: Request, res: Response) => {
+  const { venueName, rating, content } = req.body;
+  const userId = (req as any).user.userId;
 
-  if (!userId || !venueName || typeof rating !== 'number') {
-    return res.status(400).json({ error: 'userId, venueName, and rating are required' });
+  if (!venueName || typeof rating !== 'number') {
+    return res.status(400).json({ error: 'venueName and rating are required' });
+  }
+  if (rating < 1 || rating > 5) {
+    return res.status(400).json({ error: 'Rating must be 1-5' });
   }
 
-  try {
-    // Bulabildiğimiz ilk venue'yu alalım (ismi eşleşen)
-    const venue = await prisma.venue.findFirst({
-      where: { name: venueName }
-    });
+  const cleanContent = content ? sanitize(content) : null;
 
-    if (!venue) {
-      return res.status(404).json({ error: 'Venue not found' });
-    }
+  try {
+    const venue = await prisma.venue.findFirst({ where: { name: venueName } });
+    if (!venue) return res.status(404).json({ error: 'Venue not found' });
 
     const review = await prisma.review.create({
-      data: {
-        userId,
-        venueId: venue.id,
-        rating,
-        content
-      }
+      data: { userId, venueId: venue.id, rating, content: cleanContent }
     });
 
     return res.status(201).json(review);
@@ -370,43 +397,45 @@ app.get('/factions', async (req: Request, res: Response) => {
   }
 });
 
-app.post('/factions', async (req: Request, res: Response) => {
-  const { name, color, icon, description, createdBy } = req.body;
+app.post('/factions', requireAuth, async (req: Request, res: Response) => {
+  const { color, icon, description } = req.body;
+  const name = sanitize(req.body.name);
+  const createdBy = (req as any).user.userId;
+
   if (!name || !color) {
     return res.status(400).json({ error: 'name and color are required' });
   }
   try {
     const faction = await prisma.faction.create({
       data: {
-        name: name.trim(),
+        name,
         color,
         icon: icon || '⚔️',
-        description: description?.trim() || null,
-        createdBy: createdBy || null,
+        description: description ? sanitize(description) : null,
+        createdBy,
       },
     });
-    if (createdBy) {
-      await prisma.user.update({ where: { id: createdBy }, data: { factionId: faction.id } });
-    }
-    return res.status(201).json(faction);
+    await prisma.user.update({ where: { id: createdBy }, data: { factionId: faction.id } });
+    const token = jwt.sign({ userId: createdBy, factionId: faction.id }, JWT_SECRET, { expiresIn: '7d' });
+    return res.status(201).json({ ...faction, token });
   } catch (error) {
     return res.status(500).json({ error: 'Failed to create faction', details: error instanceof Error ? error.message : undefined });
   }
 });
 
-app.post('/factions/:factionId/join', async (req: Request, res: Response) => {
+app.post('/factions/:factionId/join', requireAuth, async (req: Request, res: Response) => {
   const factionId = parseInt(req.params.factionId, 10);
   if (isNaN(factionId)) return res.status(400).json({ error: 'Invalid factionId' });
 
-  const { userId } = req.body;
-  if (!userId) return res.status(400).json({ error: 'userId is required' });
+  const userId = (req as any).user.userId;
 
   try {
     const faction = await prisma.faction.findUnique({ where: { id: factionId } });
     if (!faction) return res.status(404).json({ error: 'Faction not found' });
 
     await prisma.user.update({ where: { id: userId }, data: { factionId } });
-    return res.json({ success: true, factionId: faction.id, factionName: faction.name, factionColor: faction.color, factionIcon: faction.icon });
+    const token = jwt.sign({ userId, factionId }, JWT_SECRET, { expiresIn: '7d' });
+    return res.json({ token, success: true, factionId: faction.id, factionName: faction.name, factionColor: faction.color, factionIcon: faction.icon });
   } catch (error) {
     return res.status(500).json({ error: 'Failed to join faction' });
   }
@@ -465,12 +494,14 @@ app.get('/factions/:factionId/messages', async (req: Request, res: Response) => 
   }
 });
 
-app.post('/factions/:factionId/messages', async (req: Request, res: Response) => {
+app.post('/factions/:factionId/messages', requireAuth, async (req: Request, res: Response) => {
   const factionId = parseInt(req.params.factionId, 10);
   if (isNaN(factionId)) return res.status(400).json({ error: 'Invalid factionId' });
 
-  const { userId, content, type } = req.body;
-  if (!userId || !content) return res.status(400).json({ error: 'userId and content are required' });
+  const userId = (req as any).user.userId;
+  const content = sanitize(req.body.content);
+  const { type } = req.body;
+  if (!content) return res.status(400).json({ error: 'content is required' });
 
   try {
     const user = await prisma.user.findUnique({ where: { id: userId } });
@@ -559,9 +590,10 @@ app.get('/users/:userId/profile', async (req: Request, res: Response) => {
   }
 });
 
-app.put('/users/:userId/profile-picture', async (req: Request, res: Response) => {
+app.put('/users/:userId/profile-picture', requireAuth, async (req: Request, res: Response) => {
   const userId = parseInt(req.params.userId, 10);
   if (isNaN(userId)) return res.status(400).json({ error: 'Invalid userId' });
+  if ((req as any).user.userId !== userId) return res.status(403).json({ error: 'Forbidden' });
 
   const { profilePicture } = req.body;
   if (!profilePicture || typeof profilePicture !== 'string') {

@@ -26,6 +26,7 @@ const Login = () => {
 
       if (res.ok) {
         const data = await res.json();
+        if (data.token) localStorage.setItem('token', data.token);
         localStorage.setItem('userId', data.id);
         localStorage.setItem('username', data.username);
         localStorage.setItem('factionId', data.factionId ?? '');

@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useLanguage } from './LanguageContext';
-import { API_BASE } from './config';
+import { API_BASE, authHeaders } from './config';
 
 const PRESET_COLORS = ['#ef4444', '#f97316', '#eab308', '#22c55e', '#3b82f6', '#8b5cf6', '#ec4899', '#06b6d4'];
 
@@ -47,17 +47,17 @@ export default function CreateFaction() {
     try {
       const res = await fetch(`${API_BASE}/factions`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: authHeaders(),
         body: JSON.stringify({
           name: form.name.trim(),
           color: form.color,
           icon: form.icon,
           description: form.description.trim() || null,
-          createdBy: userId,
         }),
       });
       if (res.ok) {
         const data = await res.json();
+        if (data.token) localStorage.setItem('token', data.token);
         localStorage.setItem('factionId', String(data.id));
         localStorage.setItem('factionName', data.name);
         localStorage.setItem('factionColor', data.color);

@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useLanguage } from './LanguageContext';
-import { API_BASE } from './config';
+import { API_BASE, authHeaders } from './config';
 
 interface FactionInfo {
   id: number;
@@ -41,11 +41,12 @@ export default function FactionList() {
     try {
       const res = await fetch(`${API_BASE}/factions/${factionId}/join`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ userId }),
+        headers: authHeaders(),
+        body: JSON.stringify({}),
       });
       if (res.ok) {
         const data = await res.json();
+        if (data.token) localStorage.setItem('token', data.token);
         localStorage.setItem('factionId', String(data.factionId));
         localStorage.setItem('factionName', data.factionName);
         localStorage.setItem('factionColor', data.factionColor);

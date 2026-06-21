@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react'
 import { Link } from 'react-router-dom'
 import { useLanguage } from './LanguageContext'
-import { API_BASE } from './config';
+import { API_BASE, authHeaders } from './config';
 
 
 interface ChatMessage {
@@ -115,8 +115,8 @@ export default function Faction() {
     try {
       await fetch(`${API_BASE}/factions/${factionId}/messages`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ userId, content: content.trim(), type }),
+        headers: authHeaders(),
+        body: JSON.stringify({ content: content.trim(), type }),
       });
       await fetchMessages();
     } finally {
