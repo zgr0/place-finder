@@ -1,0 +1,63 @@
+services:
+  postgres:
+    image: postgis/postgis:16-3.4
+    environment:
+      POSTGRES_USER: user
+      POSTGRES_PASSWORD: qwe123asd
+      POSTGRES_DB: placefinder_db
+    ports:
+      - "5433:5432"
+    volumes:
+      - pgdata_dev:/var/lib/postgresql/data
+    healthcheck:
+      test: [ "CMD-SHELL", "pg_isready -U user -d placefinder_db" ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  server:
+    build:
+      context: .
+      dockerfile: Dockerfile.server
+    environment:
+      DATABASE_URL: postgresql://user:qwe123asd@postgres:5432/placefinder_db
+      PORT: 3000
+      NODE_ENV: development
+      INFERENCE_URL: http://ai:8000
+      FSQ_API_KEY: ${FSQ_API_KEY:-}
+      GEMINI_API_KEY: ${GEMINI_API_KEY:-}
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+    ports:
+      - "3000:3000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: unless-stopped
+
+  ai:
+    build:
+      context: .
+      dockerfile: Dockerfile.ai
+    volumes:
+      - ./models:/models
+    environment:
+      MODEL_PATH: /models/quest-model-q4km.gguf
+      N_THREADS: ${AI_THREADS:-4}
+    restart: unless-stopped
+
+  frontend:
+    build:
+      context: .
+      dockerfile: Dockerfile.frontend
+      args:
+        VITE_API_URL: http://localhost:3000
+    ports:
+      - "5173:80"
+    volumes:
+      - ./nginx/localhost.conf:/etc/nginx/conf.d/default.conf:ro
+    depends_on:
+      - server
+    restart: unless-stopped
+
+volumes:
+  pgdata_dev:

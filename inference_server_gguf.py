@@ -32,10 +32,10 @@ _lock = threading.Lock()
 def load_model():
     global _model
     if not os.path.exists(MODEL_PATH):
-        raise FileNotFoundError(
-            f"GGUF model not found at {MODEL_PATH}. "
-            "Run scripts/convert_to_gguf.py then mount the models/ volume."
-        )
+        print(f"WARNING: GGUF model not found at {MODEL_PATH}. "
+              "Server starting without model — /generate returns 503. "
+              "Run scripts/convert_to_gguf.py then mount the models/ volume.")
+        return
     print(f"Loading GGUF from {MODEL_PATH} ({N_THREADS} threads)...")
     _model = Llama(
         model_path=MODEL_PATH,

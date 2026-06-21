@@ -3,11 +3,6 @@ import { Link } from 'react-router-dom'
 import { useLanguage } from './LanguageContext'
 import { API_BASE } from './config';
 
-const FACTION_LABELS: Record<number, string> = {
-  1: 'Red Reapers',
-  2: 'Blue Sentinels',
-  3: 'Green Guardians',
-};
 
 interface RecentReview {
   id: number;

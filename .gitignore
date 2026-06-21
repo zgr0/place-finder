@@ -83,7 +83,12 @@ public
 .storybook-out
 
 # Temporary folders
-outputs/    
+outputs/
 tmp/
 temp/
 dataset.json
+
+# ML model files
+models/*.gguf
+models/*.bin
+certbot/

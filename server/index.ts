@@ -76,8 +76,8 @@ app.get('/auth/register', (req: Request, res: Response) => {
 app.post('/auth/register', async (req: Request, res: Response) => {
   const { email: rawEmail, username, password, factionId } = req.body;
 
-  if (!rawEmail || !username || !password || !factionId) {
-    return res.status(400).json({ error: 'email, username, password, and factionId are required' });
+  if (!rawEmail || !username || !password) {
+    return res.status(400).json({ error: 'email, username, and password are required' });
   }
 
   const email = rawEmail.toLowerCase().trim();

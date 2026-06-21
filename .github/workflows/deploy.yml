@@ -1,4 +1,4 @@
-name: Build and Deploy to venuewar.com
+name: Build and Deploy to vps-8aae2664.vps.ovh.net
 
 on:
   push:
@@ -62,7 +62,7 @@ jobs:
           push: true
           tags: ${{ env.IMAGE_PREFIX }}/frontend:latest
           build-args: |
-            VITE_API_URL=https://venuewar.com/api
+            VITE_API_URL=https://vps-8aae2664.vps.ovh.net/api
           cache-from: type=gha,scope=frontend
           cache-to: type=gha,scope=frontend,mode=max
 

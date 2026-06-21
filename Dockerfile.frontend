@@ -1,9 +1,9 @@
 FROM node:20-alpine AS build
 WORKDIR /app
 COPY client/package*.json ./
-RUN npm ci
+RUN npm install
 COPY client/ .
-ARG VITE_API_URL=https://venuewar.com/api
+ARG VITE_API_URL=https://vps-8aae2664.vps.ovh.net/api
 ENV VITE_API_URL=$VITE_API_URL
 RUN npm run build
 

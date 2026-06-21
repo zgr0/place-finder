@@ -122,7 +122,7 @@ describe('Backend API Endpoints', () => {
         email: 'missing_others@test.com'
       });
       expect(res.status).toBe(400);
-      expect(res.body).toEqual({ error: 'email, username, password, and factionId are required' });
+      expect(res.body).toEqual({ error: 'email, username, and password are required' });
     });
 
     it('should return 500 on database failure', async () => {

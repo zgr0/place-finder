@@ -2,7 +2,7 @@ FROM node:20-alpine AS build
 WORKDIR /app
 COPY server/package*.json ./
 COPY server/prisma ./prisma
-RUN npm ci
+RUN npm install
 COPY server/ .
 RUN npm run build
 
@@ -11,6 +11,8 @@ WORKDIR /app
 COPY --from=build /app/dist ./dist
 COPY --from=build /app/node_modules ./node_modules
 COPY --from=build /app/prisma ./prisma
+COPY --from=build /app/prisma.config.ts ./
+COPY --from=build /app/src ./src
 COPY --from=build /app/package.json .
 EXPOSE 3000
 CMD ["sh", "-c", "node_modules/.bin/prisma migrate deploy && node dist/index.js"]

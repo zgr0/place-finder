@@ -5,55 +5,54 @@ import * as h3 from 'h3-js';
 import { API_BASE } from './config';
 
 const RESOLUTION = 9;
-
-// Veritabanı kimlikleriyle (ID) eşleşen Grup Renkleri
-const FACTION_COLORS: Record<number, string> = {
-    1: '#FF3333', // Kızıl 
-    2: '#3333FF', // Mavi 
-    3: '#33FF33', // Yeşil
-};
+const UNCLAIMED_COLOR = '#444444';
 
 const MapGrid = () => {
     const mapContainer = useRef<HTMLDivElement>(null);
     const mapRef = useRef<maplibregl.Map | null>(null);
+    const factionColors = useRef<Record<number, string>>({});
 
     useEffect(() => {
         if (mapRef.current) return;
 
         const map = new maplibregl.Map({
             container: mapContainer.current!,
-            style: 'https://basemaps.cartocdn.com/gl/dark-matter-gl-style/style.json', // VOYAGER-H3 için koyu tema
-            center: [29.01, 41.01], // Istanbul
+            style: 'https://basemaps.cartocdn.com/gl/dark-matter-gl-style/style.json',
+            center: [29.01, 41.01],
             zoom: 11,
         });
 
         mapRef.current = map;
 
+        // Faction colors fetched after map exists — repaint immediately if map already loaded
+        fetch(`${API_BASE}/factions`)
+            .then(r => r.ok ? r.json() : [])
+            .then((factions: { id: number; color: string }[]) => {
+                factionColors.current = Object.fromEntries(factions.map(f => [f.id, f.color]));
+                if (map.loaded()) updateGrid();
+            })
+            .catch(() => {});
+
         map.on('load', () => {
-            // Altıgenlerimiz için boş veri kaynağını ekle
             map.addSource('hex-grid', {
                 type: 'geojson',
                 data: { type: 'FeatureCollection', features: [] },
             });
 
-            // Altıgenleri çizecek katmanı ekle
             map.addLayer({
                 id: 'hex-layer',
                 type: 'fill',
                 source: 'hex-grid',
                 paint: {
-                    // GeoJSON özelliğinden 'color' (renk) bilgisini kullan
                     'fill-color': ['get', 'color'],
                     'fill-opacity': 0.4,
                     'fill-outline-color': '#ffffff',
                 },
             });
 
-            // İlk yükleme
             updateGrid();
         });
 
-        // Kullanıcı haritayı hareket ettirmeyi bıraktığında yeniden hesapla
         map.on('moveend', updateGrid);
 
         async function updateGrid() {
@@ -96,7 +95,9 @@ const MapGrid = () => {
             // 4. GeoJSON Özelliklerini Oluştur
             const features: GeoJSON.Feature<GeoJSON.Polygon, { h3Index: string; color: string }>[] = visibleHexes.map((hexId) => {
                 const owningFaction = ownershipMap[hexId];
-                const hexColor = owningFaction ? FACTION_COLORS[owningFaction] : '#444444'; // Sahipsizse gri
+                const hexColor = owningFaction
+                    ? (factionColors.current[owningFaction] ?? UNCLAIMED_COLOR)
+                    : UNCLAIMED_COLOR;
 
                 return {
                     type: 'Feature' as const,
