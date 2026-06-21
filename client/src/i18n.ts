@@ -111,7 +111,7 @@ export interface Translations {
 
 export const translations: Record<Lang, Translations> = {
   en: {
-    placeFinder: 'Place Finder',
+    placeFinder: 'Venue War',
     venues: 'Venues',
     hexGrid: 'Hex Grid',
     factions: 'Clans',
@@ -208,7 +208,7 @@ export const translations: Record<Lang, Translations> = {
     complete: '✓ Complete',
   },
   tr: {
-    placeFinder: 'Yer Bulucu',
+    placeFinder: 'Venue War',
     venues: 'Mekanlar',
     hexGrid: 'Hex Grid',
     factions: 'Klanlar',
